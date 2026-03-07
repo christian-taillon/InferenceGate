@@ -9,10 +9,16 @@ model_list:
       model: openai/qwen3.5:2b
       api_base: "https://ai.christiant.io/api"
       api_key: "sk-a39c999114c34e709198d1a1773b58cf"
+  - model_name: llama-guard3:1b
+    litellm_params:
+      model: openai/llama-guard3:1b
+      api_base: "https://ai.christiant.io/api"
+      api_key: "sk-a39c999114c34e709198d1a1773b58cf"
 
 litellm_settings:
   set_verbose: True
   drop_params: True
+  callbacks: ["guardrails", "llama_guard_callback.llama_guard_handler"]
 
 guardrails:
   - guardrail_name: "firewall"
@@ -20,7 +26,6 @@ guardrails:
       guardrail: litellm_content_filter
       mode: ["pre_call", "post_call"]
       default_on: true
-      
       custom_regex_config:
         - name: "EMAIL"
           regex: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
@@ -38,5 +43,7 @@ guardrails:
           regex: "(?i)(Google|Microsoft|Anthropic|Meta|Amazon)"
           action: "BLOCK"
 
-# Enable guardrails system
-callbacks: ["guardrails"]
+# Explicitly attach firewall to all models
+policy_attachments:
+  - policy: "firewall"
+    scope: "*"
