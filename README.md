@@ -1,50 +1,42 @@
-# LiteLLM Firewall
+# LiteLLM Firewall Demonstration
 
 A minimal, non-over-engineered LLM firewall built using LiteLLM Proxy.
 
 ## Purpose
-This project demonstrates how to set up guardrails and filters for sensitive information (PII) and malicious prompts using LiteLLM's built-in content filters and Llama Guard assessment. It acts as a gateway between users and the underlying AI model.
+This project demonstrates how to set up guardrails and filters for sensitive information (PII) and malicious prompts using LiteLLM's built-in content filters and Llama Guard assessment. It acts as a security gateway between users and an underlying AI model.
 
-## Demonstration Phases
+## Features
 
-### Phase 1: Built-in Content Filters (Regex)
+### Phase 1: Built-in Content Filters (Regex & Keywords)
 Demonstrates LiteLLM's on-device, zero-cost guardrails:
-- **PII Masking**: Automatically redacts emails and credit cards.
+- **PII Blocking**: Automatically blocks prompts containing sensitive information like specific email addresses.
 - **Prompt Injection Protection**: Blocks "ignore all previous instructions" style attacks.
-- **Brand Protection**: Blocks competitor mentions (e.g., Google, Microsoft).
+- **Brand Protection**: Blocks competitor mentions (e.g., Google, Microsoft) via keyword matching.
 
 ### Phase 2: Llama-Guard-3 Content Assessment
-Demonstrates leveraging a specialized safety model (`llama-guard3:1b`) to assess intent:
-- **Violent Content Detection**: Detects prompts about building weapons (S9).
-- **Illegal Activity Detection**: Detects prompts about theft or crime (S2).
+Demonstrates leveraging a specialized safety model (`llama-guard3:1b`) to assess user intent:
+- **Violent Content Detection**: Detects prompts about harmful activities (S9).
+- **Illegal Activity Detection**: Detects prompts about theft or crimes (S2).
 
 ## Setup
-1.  Ensure you have `uv` installed.
-2.  Configure your `.env` file with:
+
+1.  **Prerequisites**: Ensure you have [uv](https://github.com/astral-sh/uv) installed.
+2.  **Environment**: Create a `.env` file with your API credentials:
     ```env
     baseURL='https://ai.christiant.io/api'
-    OPENAI_API_KEY='your-key'
+    OPENAI_API_KEY='your-sk-...'
     MODEL='qwen3.5:35b-ctx100k'
     ```
-3.  Install dependencies:
+3.  **Install Dependencies**:
     ```bash
     uv sync
     ```
 
 ## Running the Demonstration
-Execute the demonstration script:
+The demonstration orchestrates a LiteLLM Proxy instance and runs test cases against it:
 ```bash
 uv run demo.py
 ```
 
-The script will:
-1.  Start the LiteLLM Proxy in the background using `config.yaml`.
-2.  Run tests for Phase 1 (Built-in filters).
-3.  Run tests for Phase 2 (Llama Guard assessment).
-4.  Cleanly shut down the proxy.
-
 ## Configuration
-The guardrails are defined in `config.yaml` using `litellm_content_filter`. 
-
-## Logs
-Detailed logs of the firewall activity can be found in `firewall.log` during execution.
+The firewall policies are defined in `config.yaml` using the LiteLLM `guardrails` system. This allows for easy replication and modification of safety rules across different environments.
