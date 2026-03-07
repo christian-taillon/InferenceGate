@@ -1,0 +1,42 @@
+model_list:
+  - model_name: qwen3.5:35b-ctx100k
+    litellm_params:
+      model: openai/qwen3.5:35b-ctx100k
+      api_base: "https://ai.christiant.io/api"
+      api_key: "sk-a39c999114c34e709198d1a1773b58cf"
+  - model_name: qwen3.5:2b
+    litellm_params:
+      model: openai/qwen3.5:2b
+      api_base: "https://ai.christiant.io/api"
+      api_key: "sk-a39c999114c34e709198d1a1773b58cf"
+
+litellm_settings:
+  set_verbose: True
+  drop_params: True
+
+guardrails:
+  - guardrail_name: "firewall"
+    litellm_params:
+      guardrail: litellm_content_filter
+      mode: ["pre_call", "post_call"]
+      default_on: true
+      
+      custom_regex_config:
+        - name: "EMAIL"
+          regex: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+          action: "MASK"
+        - name: "PHONE_NUMBER"
+          regex: "(\\+?\\d{1,2}[\\s.-]?)?(\\d{3}[\\s.-]?\\d{3}[\\s.-]?\\d{4})"
+          action: "MASK"
+        - name: "CREDIT_CARD"
+          regex: "\\b(?:\\d[ -]*?){13,16}\\b"
+          action: "MASK"
+        - name: "PROMPT_INJECTION"
+          regex: "(?i)(ignore all previous instructions|system prompt|disregard instructions)"
+          action: "BLOCK"
+        - name: "COMPETITOR_BLOCK"
+          regex: "(?i)(Google|Microsoft|Anthropic|Meta|Amazon)"
+          action: "BLOCK"
+
+# Enable guardrails system
+callbacks: ["guardrails"]
