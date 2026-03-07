@@ -1,9 +1,9 @@
 model_list:
-  - model_name: qwen3.5:35b-ctx100k
+  - model_name: firewall-model
     litellm_params:
-      model: openai/qwen3.5:35b-ctx100k
-      api_base: "https://ai.christiant.io/api"
-      api_key: "os.environ/OPENAI_API_KEY"
+      model: "openai/qwen3.5:35b-ctx100k"
+      api_base: "os.environ/LITELLM_API_BASE"
+      api_key: "os.environ/LITELLM_API_KEY"
 
 litellm_settings:
   set_verbose: False
