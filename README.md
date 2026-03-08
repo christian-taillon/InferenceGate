@@ -44,10 +44,22 @@ Advanced intent analysis using a specialized safety model:
     uv sync  # or: pip install -r requirements.txt
     ```
 
+## Running the Service (for Open WebUI)
+To run the firewall as a persistent service for Open WebUI or other apps:
+```bash
+uv run serve.py
+```
+This will start the proxy on port 4000 and print connection instructions.
+
 ## Running the Demonstration
 Run the automated test suite to see the firewall in action:
 ```bash
 uv run demo.py
+```
+
+For an auto-advancing version of the demo, pass a delay in seconds:
+```bash
+uv run demo.py --delay 2
 ```
 
 ## Customization
