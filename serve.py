@@ -10,6 +10,8 @@ GREEN = "\033[92m"
 CYAN = "\033[96m"
 YELLOW = "\033[93m"
 BOLD = "\033[1m"
+DIM = "\033[2m"
+BG_CYAN = "\033[46m\033[30m"
 RESET = "\033[0m"
 
 load_dotenv()
@@ -22,19 +24,26 @@ def get_local_ip():
         s.close()
         return local_ip
     except Exception:
-        return "0.0.0.0"
+        return "127.0.0.1"
 
-def print_instructions(ip):
-    print("\n" + "="*60)
-    print(f"{BOLD}{GREEN}      LITELLM FIREWALL PROXY IS RUNNING{RESET}")
-    print("="*60)
-    print(f"\n{BOLD}To use this in Open WebUI (Settings > Connections > OpenAI API):{RESET}")
-    print(f"\n{BOLD}Option A: Open WebUI on SAME machine{RESET}  -> {CYAN}http://localhost:4000/v1{RESET}")
-    print(f"{BOLD}Option B: Open WebUI in DOCKER{RESET}       -> {CYAN}http://host.docker.internal:4000/v1{RESET}")
-    print(f"{BOLD}Option C: Open WebUI on LAN{RESET}          -> {CYAN}http://{ip}:4000/v1{RESET}")
-    print(f"\n{BOLD}Settings:{RESET} API Key: {CYAN}sk-litellm-firewall-v1-demo{RESET} | Model: {CYAN}firewall-model{RESET}")
-    print("="*60)
-    print(f"\n{BOLD}Logs will appear below (Press Ctrl+C to stop)...{RESET}\n")
+def print_instructions(ip, port):
+    print("\n" + "═"*60)
+    print(f"{BOLD}{GREEN}      🛡️  LITELLM FIREWALL PROXY IS ONLINE{RESET}")
+    print("═"*60)
+    
+    print(f"\n{BOLD}CONNECTION SETTINGS:{RESET}")
+    print(f"  {CYAN}Base URL:{RESET}  {BOLD}http://{ip}:{port}/v1{RESET}")
+    print(f"  {CYAN}API Key:{RESET}   {BOLD}sk-litellm-firewall-v1-demo{RESET}")
+    print(f"  {CYAN}Model:{RESET}     {BOLD}firewall-model{RESET}")
+
+    print(f"\n{BOLD}INTEGRATION GUIDES:{RESET}")
+    print(f"  {BOLD}• Same Machine:{RESET}  {CYAN}http://localhost:{port}/v1{RESET}")
+    print(f"  {BOLD}• Docker/WSL:{RESET}    {CYAN}http://host.docker.internal:{port}/v1{RESET}")
+    print(f"  {BOLD}• Network/LAN:{RESET}   {CYAN}http://{ip}:{port}/v1{RESET}")
+    
+    print("\n" + "─"*60)
+    print(f"{DIM}Logs will stream below. Press {RESET}{BOLD}Ctrl+C{RESET}{DIM} to terminate safely.{RESET}")
+    print("─"*60 + "\n")
 
 def run_service():
     port = "4000"
@@ -56,7 +65,7 @@ def run_service():
     
     try:
         ip = get_local_ip()
-        print_instructions(ip)
+        print_instructions(ip, port)
         process = subprocess.Popen(cmd, env=env)
         process.wait()
     except KeyboardInterrupt:
