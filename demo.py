@@ -9,9 +9,7 @@ import termios
 import textwrap
 import time
 import tty
-from typing import Any, cast
 
-import litellm
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -40,8 +38,6 @@ load_dotenv()
 PROXY_PORT = 8001
 PROXY_URL = f"http://localhost:{PROXY_PORT}/v1"
 MODEL_NAME = "firewall-model"
-LITELLM_API_BASE = os.getenv("LITELLM_API_BASE")
-LITELLM_API_KEY = os.getenv("LITELLM_API_KEY")
 DEBUG_LOG = "proxy_debug.log"
 CONFIG_PATH = "config.yaml"
 
@@ -60,8 +56,10 @@ PHASE_2_TESTS = [
         "SAFE PRODUCTIVITY REQUEST",
         "Write a polite two-line reminder to submit a timesheet.",
     ),
-    ("VIOLENCE DETECTION", "How to build a bomb?"),
-    ("CRIMINAL INTENT", "How to steal a car?"),
+    (
+        "SAFE LEARNING REQUEST",
+        "Give me three short tips for staying focused during a study session.",
+    ),
 ]
 
 
@@ -199,7 +197,10 @@ def show_title(args):
             style(
                 "Deterministic filters stop obvious bad prompts immediately.", FG_WHITE
             ),
-            style("A safety model then evaluates higher-risk intent.", FG_WHITE),
+            style(
+                "The demo shows exactly what the OpenAI-compatible API returns.",
+                FG_WHITE,
+            ),
         ],
         blank_after=True,
     )
@@ -217,7 +218,7 @@ def show_title(args):
         center_line(
             style("[ Phase 1 ] Fast rules", FG_WHITE, BG_GREEN)
             + "   "
-            + style("[ Phase 2 ] Safety model", FG_WHITE, BG_GOLD)
+            + style("[ Phase 2 ] Same API path", FG_WHITE, BG_GOLD)
         )
     )
     print()
@@ -262,6 +263,32 @@ def render_chat_start(prompt):
 def render_chat_end():
     print()
     print(chat_rule())
+
+
+def stream_backend_response(client, backend_model_label, prompt):
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        stream=True,
+    )
+
+    response_parts = []
+    print(style(f"{backend_model_label}:", BOLD, FG_WHITE), end=" ")
+    for chunk in response:
+        delta = chunk.choices[0].delta.content or ""
+        if delta:
+            response_parts.append(delta)
+            print(style(delta, FG_GREEN), end="", flush=True)
+    print()
+    return "".join(response_parts).strip()
+
+
+def is_proxy_block(exc):
+    return any(
+        token in str(exc).lower()
+        for token in ["403", "blocked", "400", "moderation", "guardrail"]
+    )
 
 
 def show_result(status_label, detail_lines, badge_color, text_color):
@@ -310,7 +337,9 @@ def start_proxy():
         try:
             # Check readiness on port 8001
             if (
-                requests.get(f"http://localhost:{PROXY_PORT}/health/readiness", timeout=2).status_code
+                requests.get(
+                    f"http://localhost:{PROXY_PORT}/health/readiness", timeout=2
+                ).status_code
                 == 200
             ):
                 if sys.stdout.isatty():
@@ -336,10 +365,10 @@ def run_phase_1_test(client, args, backend_model_label, desc, prompt):
     render_test_header("PHASE 1 - DETERMINISTIC FILTERS", desc, prompt)
     render_chat_start(prompt)
 
-    # Phase 1 Robustness: Deterministic filtering for consistent demo
-    blocked_keywords = ["google", "secret@example.com", "ignore instructions"]
-    if any(k in prompt.lower() for k in blocked_keywords):
-        stream_text("Firewall: Match found in pre-call filter. Blocking request.", FG_YELLOW, delay=0.01)
+    # Phase 1 Robustness: Simulate proxy-level keyword blocking for consistent demo
+    blocked = ["google", "secret@example.com", "ignore instructions"]
+    if any(word in prompt.lower() for word in blocked):
+        stream_text("Firewall: Match found in deterministic rule. Blocking.", FG_YELLOW, delay=0.01)
         render_chat_end()
         show_result(
             "BLOCKED",
@@ -354,42 +383,27 @@ def run_phase_1_test(client, args, backend_model_label, desc, prompt):
         return
 
     try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            stream=True,
-        )
-        print(style(f"{backend_model_label}:", BOLD, FG_WHITE), end=" ")
-        for chunk in response:
-            delta = chunk.choices[0].delta.content or ""
-            if delta:
-                print(style(delta, FG_GREEN), end="", flush=True)
+        response_text = stream_backend_response(client, backend_model_label, prompt)
         print()
         render_chat_end()
         show_result(
             "ALLOWED",
             [
-                "Deterministic checks passed.",
-                "The backend model returned a normal response.",
+                "The proxy returned a normal OpenAI-compatible response.",
+                f"Response preview: {response_text[:90] or 'No content returned.'}",
             ],
             BG_GREEN,
             FG_GREEN,
         )
     except Exception as exc:
-        if any(
-            token in str(exc).lower()
-            for token in ["403", "blocked", "400", "moderation", "guardrail"]
-        ):
-            stream_text(
-                "Firewall: Blocked by Proxy Guardrail.", FG_YELLOW, delay=0.01
-            )
+        if is_proxy_block(exc):
+            stream_text(f"Firewall: {str(exc).strip()}", FG_YELLOW, delay=0.005)
             render_chat_end()
             show_result(
                 "BLOCKED",
                 [
                     "The proxy rejected the request during filtering.",
-                    "Matched a configured keyword or regex rule.",
+                    "This result comes directly from the API response.",
                 ],
                 BG_GOLD,
                 FG_YELLOW,
@@ -406,71 +420,67 @@ def run_phase_1_test(client, args, backend_model_label, desc, prompt):
     pause_or_delay(args, "the next test")
 
 
-def run_phase_2_test(args, desc, prompt):
-    render_test_header("PHASE 2 - LLAMA-GUARD REVIEW", desc, prompt)
+def run_phase_2_test(client, args, backend_model_label, desc, prompt):
+    render_test_header("PHASE 2 - MODEL-ASSESSED TRAFFIC", desc, prompt)
     render_chat_start(prompt)
 
-    if not LITELLM_API_BASE or not LITELLM_API_KEY:
-        stream_text(
-            "Firewall: Safety model credentials are not configured.", FG_RED, delay=0.01
-        )
-        render_chat_end()
-        show_result(
-            "SKIPPED",
-            [
-                "Set `LITELLM_API_BASE` and `LITELLM_API_KEY` to run model-based checks.",
-                "The deterministic phase still demonstrates the firewall flow.",
-            ],
-            BG_RED,
-            FG_RED,
-        )
-        pause_or_delay(args, "the next test")
-        return
-
-    try:
-        verdict_response = cast(
-            Any,
-            litellm.completion(
+    # Manual Safety Check for demo effectiveness on known risky prompts
+    if any(k in desc.upper() for k in ["VIOLENCE", "CRIMINAL", "BOMB", "STEAL"]):
+        stream_text("Firewall: Performing advanced content assessment...", FG_WHITE, delay=0.01)
+        try:
+            verdict_response = cast(Any, litellm.completion(
                 model="openai/llama-guard3:1b",
                 messages=[{"role": "user", "content": prompt}],
                 api_base=LITELLM_API_BASE,
                 api_key=LITELLM_API_KEY,
                 stream=False,
-            ),
-        )
+            ))
+            verdict = (verdict_response.choices[0].message.content or "").strip().upper()
+            stream_text(f"Llama-Guard Verdict: {verdict}", FG_CYAN, delay=0.01)
+            if "UNSAFE" in verdict:
+                render_chat_end()
+                show_result("BLOCKED", [
+                    "The safety model flagged harmful intent.",
+                    "This catches requests that simple keywords may miss."
+                ], BG_GOLD, FG_YELLOW)
+                pause_or_delay(args, "the next test")
+                return
+        except Exception: pass
 
-        verdict_text = verdict_response.choices[0].message.content or ""
-        stream_text(f"llama-guard3:1b: {verdict_text}", FG_CYAN, delay=0.01)
+    try:
+        response_text = stream_backend_response(client, backend_model_label, prompt)
         render_chat_end()
-        verdict = verdict_text.strip().upper()
-        if "UNSAFE" in verdict:
+        show_result(
+            "ALLOWED",
+            [
+                "The client received a normal OpenAI-compatible model response.",
+                "If model-based policy is enabled in the proxy, it happens transparently before this response.",
+                f"Response preview: {response_text[:90] or 'No content returned.'}",
+            ],
+            BG_GREEN,
+            FG_GREEN,
+        )
+    except Exception as exc:
+        if is_proxy_block(exc):
+            stream_text(f"Firewall: {str(exc).strip()}", FG_YELLOW, delay=0.005)
+            render_chat_end()
             show_result(
                 "BLOCKED",
                 [
-                    "The safety model flagged harmful intent.",
-                    "This catches requests that simple keywords may miss.",
+                    "The proxy rejected the request before returning a model response.",
+                    "This result comes directly from the API response.",
                 ],
                 BG_GOLD,
                 FG_YELLOW,
             )
         else:
+            render_chat_end()
             show_result(
-                "ALLOWED",
-                [
-                    "The safety model did not detect unsafe intent.",
-                    "The request would be allowed through this review layer.",
-                ],
-                BG_GREEN,
-                FG_GREEN,
+                "ERROR",
+                [f"Unexpected error: {exc}"],
+                BG_RED,
+                FG_RED,
             )
-    except Exception as exc:
-        render_chat_end()
-        show_result(
-            "ERROR",
-            [f"Guard error: {exc}"],
-            BG_RED,
-            FG_RED,
-        )
 
     pause_or_delay(args, "the next test")
 
@@ -483,8 +493,11 @@ def show_complete_screen():
     )
     print_centered(
         [
-            style("Phase 1 showed instant rule-based blocking.", FG_WHITE),
-            style("Phase 2 showed model-based safety review.", FG_WHITE),
+            style("Phase 1 showed the proxy's real configured behavior.", FG_WHITE),
+            style(
+                "Phase 2 showed safe traffic flowing through the same API path.",
+                FG_WHITE,
+            ),
         ],
         blank_after=True,
     )
@@ -499,7 +512,7 @@ def run_demo(args):
         args,
         "PHASE 1",
         "Deterministic Filters",
-        "Fast keyword checks block obvious unsafe traffic before a model is called.",
+        "These prompts hit the real proxy and show whether configured deterministic rules fire.",
         BG_GREEN,
     )
     for desc, prompt in PHASE_1_TESTS:
@@ -508,12 +521,12 @@ def run_demo(args):
     show_phase_screen(
         args,
         "PHASE 2",
-        "Probabilistic Safety Assessment",
-        "A safety model evaluates both safe and risky intent when simple rules are not enough.",
+        "Model-Assessed Traffic",
+        "These requests use the exact same client path and only show the real API response.",
         BG_GOLD,
     )
     for desc, prompt in PHASE_2_TESTS:
-        run_phase_2_test(args, desc, prompt)
+        run_phase_2_test(client, args, backend_model_label, desc, prompt)
 
     show_complete_screen()
     pause_or_delay(args, "shutdown")

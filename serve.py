@@ -53,7 +53,7 @@ def run_service():
     port = "4000"
     host = "0.0.0.0" # Bind to all interfaces for LAN access
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.getcwd()
+    env["PYTHONUNBUFFERED"] = "1"
     
     # We must ensure LiteLLM itself requires the key we told the user to use
     # We set it as the master key for the proxy

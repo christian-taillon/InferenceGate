@@ -4,13 +4,10 @@ model_list:
       model: "openai/qwen3.5:35b-ctx100k"
       api_base: "os.environ/LITELLM_API_BASE"
       api_key: "os.environ/LITELLM_API_KEY"
-      guardrails:
-        - firewall
 
 litellm_settings:
   set_verbose: False
   drop_params: True
-  callbacks: ["guardrails"]
 
 guardrails:
   - guardrail_name: "firewall"
@@ -18,13 +15,10 @@ guardrails:
       guardrail: litellm_content_filter
       mode: ["pre_call"]
       default_on: true
-      custom_regex_config:
-        - name: "PII_BLOCK"
-          regex: "secret@example\\.com"
+      blocked_words:
+        - keyword: "Google"
           action: "BLOCK"
-        - name: "INJECTION_BLOCK"
-          regex: "Ignore instructions"
+        - keyword: "secret@example.com"
           action: "BLOCK"
-        - name: "BRAND_BLOCK"
-          regex: "Google"
+        - keyword: "Ignore instructions"
           action: "BLOCK"
