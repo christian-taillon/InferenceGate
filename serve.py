@@ -19,7 +19,7 @@ def print_instructions():
     print(f"\n{BOLD}To use this in Open WebUI:{RESET}")
     print(f"\n1. Go to {BOLD}Settings > Connections > OpenAI API{RESET}")
     print(f"2. Set {BOLD}API Base URL{RESET} to:  {CYAN}http://localhost:4000/v1{RESET}")
-    print(f"3. Set {BOLD}API Key{RESET} to:       {CYAN}sk-anything{RESET}")
+    print(f"3. Set {BOLD}API Key{RESET} to:       {CYAN}sk-litellm-firewall-v1-demo{RESET}")
     print(f"4. Click the {BOLD}Refresh{RESET} icon next to the model list.")
     print(f"5. Select {BOLD}firewall-model{RESET} from the dropdown.")
     print(f"\n{BOLD}Note:{RESET} If Open WebUI is in Docker, use {CYAN}http://host.docker.internal:4000/v1{RESET}")
