@@ -4,12 +4,16 @@ model_list:
       model: "openai/qwen3.5:35b-ctx100k"
       api_base: "os.environ/LITELLM_API_BASE"
       api_key: "os.environ/LITELLM_API_KEY"
+      guardrails:
+        - firewall
+        - llama-guard
 
 litellm_settings:
   set_verbose: False
   drop_params: True
 
 guardrails:
+  # Phase 1: Built-in deterministic filter
   - guardrail_name: "firewall"
     litellm_params:
       guardrail: litellm_content_filter
@@ -22,3 +26,10 @@ guardrails:
           action: "BLOCK"
         - keyword: "Ignore instructions"
           action: "BLOCK"
+
+  # Phase 2: Custom Llama Guard integration
+  - guardrail_name: "llama-guard"
+    litellm_params:
+      guardrail: firewall_callbacks.LlamaGuardShield
+      mode: ["pre_call"]
+      default_on: true
