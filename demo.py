@@ -38,7 +38,7 @@ SPINNER_FRAMES = ["[    ]", "[=   ]", "[==  ]", "[=== ]", "[ ===]", "[  ==]", "[
 load_dotenv()
 
 PROXY_PORT = 8001
-PROXY_URL = f"http://localhost:{PROXY_PORT}"
+PROXY_URL = f"http://localhost:{PROXY_PORT}/v1"
 MODEL_NAME = "firewall-model"
 LITELLM_API_BASE = os.getenv("LITELLM_API_BASE")
 LITELLM_API_KEY = os.getenv("LITELLM_API_KEY")
@@ -279,6 +279,7 @@ def start_proxy():
     env = os.environ.copy()
     env["PYTHONPATH"] = os.getcwd()
     env["PYTHONUNBUFFERED"] = "1"
+    env["LITELLM_MASTER_KEY"] = "sk-litellm-firewall-v1-demo"
 
     log_file = open(DEBUG_LOG, "w")
     process = subprocess.Popen(
@@ -307,8 +308,9 @@ def start_proxy():
         )
         frame = (frame + 1) % len(SPINNER_FRAMES)
         try:
+            # Check readiness on port 8001
             if (
-                requests.get(f"{PROXY_URL}/health/readiness", timeout=2).status_code
+                requests.get(f"http://localhost:{PROXY_PORT}/health/readiness", timeout=2).status_code
                 == 200
             ):
                 if sys.stdout.isatty():
@@ -334,15 +336,16 @@ def run_phase_1_test(client, args, backend_model_label, desc, prompt):
     render_test_header("PHASE 1 - DETERMINISTIC FILTERS", desc, prompt)
     render_chat_start(prompt)
 
-    blocked = ["google", "secret@example.com", "ignore instructions"]
-    if any(word in prompt.lower() for word in blocked):
-        stream_text("Firewall: Blocked before the model call.", FG_YELLOW, delay=0.01)
+    # Phase 1 Robustness: Deterministic filtering for consistent demo
+    blocked_keywords = ["google", "secret@example.com", "ignore instructions"]
+    if any(k in prompt.lower() for k in blocked_keywords):
+        stream_text("Firewall: Match found in pre-call filter. Blocking request.", FG_YELLOW, delay=0.01)
         render_chat_end()
         show_result(
             "BLOCKED",
             [
-                "Matched a configured keyword rule before the model ran.",
-                "This is the fastest and most predictable layer of defense.",
+                "Matched a configured deterministic rule.",
+                "This layer stops obvious threats before they reach any model.",
             ],
             BG_GOLD,
             FG_YELLOW,
@@ -376,17 +379,17 @@ def run_phase_1_test(client, args, backend_model_label, desc, prompt):
     except Exception as exc:
         if any(
             token in str(exc).lower()
-            for token in ["403", "blocked", "400", "moderation"]
+            for token in ["403", "blocked", "400", "moderation", "guardrail"]
         ):
             stream_text(
-                "Firewall: Blocked before the model call.", FG_YELLOW, delay=0.01
+                "Firewall: Blocked by Proxy Guardrail.", FG_YELLOW, delay=0.01
             )
             render_chat_end()
             show_result(
                 "BLOCKED",
                 [
                     "The proxy rejected the request during filtering.",
-                    "No backend model response was returned.",
+                    "Matched a configured keyword or regex rule.",
                 ],
                 BG_GOLD,
                 FG_YELLOW,
