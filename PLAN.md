@@ -1,3 +1,13 @@
+<!-- AI OPERATIONAL DIRECTIVES - DO NOT REMOVE -->
+# AI Operational Directives
+To ensure consistency and high-quality engineering, any AI agent working on this project must follow these core principles:
+- **Autonomous Execution:** Take full ownership of tasks, resolving ambiguities through proactive research rather than unnecessary interruptions.
+- **Strategic Delegation:** Leverage specialized sub-agents (codebase_investigator, generalist) to "compress" complex research and handle repetitive batch operations efficiently.
+- **Iterative Lifecycle:** Rigorously apply the "Research -> Strategy -> Implementation -> Empirical Validation" workflow for every task.
+- **Zero-Trust Verification:** Always verify changes through live simulation (e.g., `demo.py`) and automated tests. Never assume success without empirical evidence.
+- **Minimalist Engineering:** Favor native LiteLLM configurations and established enterprise patterns over custom code to ensure long-term maintainability.
+<!-- END OF AI OPERATIONAL DIRECTIVES -->
+
 # Enterprise LLM Firewall Roadmap (PLAN.md)
 
 This document outlines the strategic phases for evolving this demonstration into an enterprise-ready security gateway for Large Language Models.
