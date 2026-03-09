@@ -62,4 +62,28 @@ This document outlines the strategic phases for evolving this demonstration into
 
 ---
 
+## Phase 4: Automated Testing & CI Readiness
+**Objective:** Ensure regression safety with automated tests and prepare for CI/CD integration.
+
+### Tasks:
+1.  **Unit Test Suite:** ✅ `tests/test_firewall.py` — 29 tests (26 pass, 3 xfail)
+    *   Regex pattern matching (JWT, SQL injection, prompt injection)
+    *   Llama Guard taxonomy integrity (S1-S14)
+    *   Error parsing logic (`parse_error` from demo.py)
+    *   Config.yaml structure validation
+2.  **Known False Positives (xfail):** Documented regex limitations:
+    *   SQL Injection regex matches common English words ("select", "update")
+    *   Prompt Injection regex matches benign "you are now" phrases
+    *   **Next step:** Refine regexes with context-aware patterns (e.g., require SQL syntax after keyword, not just `\b...\b.*`)
+3.  **CI/CD Pipeline:** ⬜ Not yet implemented
+    *   Add GitHub Actions workflow for automated test runs
+    *   Add pre-commit hooks for linting (ruff) and testing
+
+### Decisions:
+- Tests use import shims to run without live LLM backend or LiteLLM proxy
+- `pytest>=8.0.0` added as optional dev dependency (`pip install -e ".[dev]"`)
+- README.md port reference corrected from 4000 to 8001
+
+---
+
 **Philosophy:** Maintain the "Lite" in LiteLLM. Avoid over-engineering; prefer native features over custom code whenever they meet the security bar.
