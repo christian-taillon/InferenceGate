@@ -1,6 +1,7 @@
-# Local Environment & Secrets
+# Local Environment & Secrets (all provider env files)
 .env
 .env.local
+.go.env
 *.env
 
 # Python & Dependencies

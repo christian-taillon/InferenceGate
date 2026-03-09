@@ -80,7 +80,8 @@ This document outlines the strategic phases for evolving this demonstration into
     *   Test matrix: Python 3.12 and 3.13
     *   Uses `uv` for fast dependency management
     *   Optional ruff lint check (non-blocking)
-    *   ⬜ Pre-commit hooks for linting (ruff) — future enhancement
+    *   ✅ Pre-commit hook: `scripts/install-hooks.sh` (ruff + pytest gate)
+    *   ✅ Live smoke test: `tests/smoke_test.py --env <envfile>` (provider connectivity)
 
 ### Decisions:
 - Tests use import shims to run without live LLM backend or LiteLLM proxy
