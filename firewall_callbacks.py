@@ -47,7 +47,7 @@ class LlamaGuardShield(CustomGuardrail):
         print(f"DEBUG: LlamaGuard checking prompt: {user_content[:50]}...")
         
         try:
-            api_base = os.getenv("LITELLM_API_BASE", "https://ai.christiant.io/api")
+            api_base = os.getenv("LITELLM_API_BASE", "https://api.your-provider.com")
             api_key = os.getenv("LITELLM_API_KEY")
             
             # Request Llama Guard 3 verdict
