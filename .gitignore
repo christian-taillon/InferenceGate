@@ -1,7 +1,26 @@
+# Local Environment & Secrets
 .env
-*.log
+.env.local
+*.env
+
+# Python & Dependencies
 __pycache__/
+*.py[cod]
+*$py.class
 .venv/
-.python-version
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Logs & Debugging
+*.log
+proxy_debug.log
+.ruff_cache/
 .pytest_cache/
-*.pyc
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store

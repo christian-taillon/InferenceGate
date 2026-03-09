@@ -2,8 +2,8 @@ model_list:
   - model_name: firewall-model
     litellm_params:
       model: "openai/qwen3.5:35b-ctx100k"
-      api_base: "os.environ/LITELLM_API_BASE"
-      api_key: "os.environ/LITELLM_API_KEY"
+      api_base: "https://ai.christiant.io/api"
+      api_key: "sk-a39c999114c34e709198d1a1773b58cf"
       guardrails:
         - firewall
         - llama-guard
@@ -13,23 +13,58 @@ litellm_settings:
   drop_params: True
 
 guardrails:
-  # Phase 1: Built-in deterministic filter
+  # Phase 1: Built-in deterministic filter (Immediate Block)
   - guardrail_name: "firewall"
     litellm_params:
       guardrail: litellm_content_filter
-      mode: ["pre_call"]
+      mode: "pre_call"
       default_on: true
-      blocked_words:
-        - keyword: "Google"
+      
+      patterns:
+        # Financial PII
+        - pattern_type: "prebuilt"
+          pattern_name: "iban"
           action: "BLOCK"
-        - keyword: "secret@example.com"
+        - pattern_type: "prebuilt"
+          pattern_name: "credit_card"
           action: "BLOCK"
-        - keyword: "Ignore instructions"
+          
+        # Identity PII
+        - pattern_type: "prebuilt"
+          pattern_name: "us_ssn"
+          action: "BLOCK"
+        - pattern_type: "prebuilt"
+          pattern_name: "email"
+          action: "BLOCK"
+        - pattern_type: "prebuilt"
+          pattern_name: "ipv4"
+          action: "BLOCK"
+          
+        # Secret Detection
+        - pattern_type: "prebuilt"
+          pattern_name: "aws_access_key"
+          action: "BLOCK"
+        - pattern_type: "regex"
+          name: "JWT Token"
+          pattern: "\\beyJ[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.?[A-Za-z0-9-_.+/=]*\\b"
+          action: "BLOCK"
+        - pattern_type: "prebuilt"
+          pattern_name: "generic_api_key"
           action: "BLOCK"
 
-  # Phase 2: Custom Llama Guard integration
+        # LLM Attack Patterns
+        - pattern_type: "regex"
+          name: "SQL Injection"
+          pattern: "(?i)\\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE)\\b.*"
+          action: "BLOCK"
+        - pattern_type: "regex"
+          name: "Prompt Injection"
+          pattern: "(?i)\\b(ignore (all )?previous instructions|system prompt|DAN mode|you are now|act as a)\\b"
+          action: "BLOCK"
+
+  # Phase 2: Custom Llama Guard integration (Sequential fallback)
   - guardrail_name: "llama-guard"
     litellm_params:
       guardrail: firewall_callbacks.LlamaGuardShield
-      mode: ["pre_call"]
+      mode: "pre_call"
       default_on: true
