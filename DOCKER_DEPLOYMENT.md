@@ -1,6 +1,6 @@
-# Docker Deployment Guide: LiteLLM Enterprise Firewall
+# Docker Deployment Guide: InferenceGate
 
-This guide provides instructions for deploying the Enterprise LLM Firewall in a containerized production environment.
+This guide provides instructions for deploying the InferenceGate in a containerized production environment.
 
 ## 1. Prerequisites
 - Docker & Docker Compose

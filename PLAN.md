@@ -8,7 +8,7 @@ To ensure consistency and high-quality engineering, any AI agent working on this
 - **Minimalist Engineering:** Favor native LiteLLM configurations and established enterprise patterns over custom code to ensure long-term maintainability.
 <!-- END OF AI OPERATIONAL DIRECTIVES -->
 
-# Enterprise LLM Firewall Roadmap (PLAN.md)
+# InferenceGate Roadmap (PLAN.md)
 
 This document outlines the strategic phases for evolving this demonstration into an enterprise-ready security gateway for Large Language Models.
 

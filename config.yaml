@@ -5,7 +5,7 @@ model_list:
       api_base: "https://ai.christiant.io/api"
       api_key: "sk-a39c999114c34e709198d1a1773b58cf"
       guardrails:
-        - firewall
+        - inference-gate
         - llama-guard
 
 litellm_settings:
@@ -14,7 +14,7 @@ litellm_settings:
 
 guardrails:
   # Phase 1: Built-in deterministic filter (Immediate Block)
-  - guardrail_name: "firewall"
+  - guardrail_name: "inference-gate"
     litellm_params:
       guardrail: litellm_content_filter
       mode: "pre_call"

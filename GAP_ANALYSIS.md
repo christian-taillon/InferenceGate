@@ -1,6 +1,6 @@
-# Gap Analysis: Current LLM Firewall vs. Enterprise Requirements
+# Gap Analysis: Current InferenceGate vs. Enterprise Requirements
 
-This report assesses the current state of the LiteLLM Firewall against industry-standard requirements for production-grade security gateways.
+This report assesses the current state of the LiteInferenceGate against industry-standard requirements for production-grade security gateways.
 
 ## 1. Security & Compliance
 | Requirement | Status | Gap / Recommendation |

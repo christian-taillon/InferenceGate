@@ -1,6 +1,6 @@
-# LiteLLM Firewall Demonstration
+# InferenceGate Demonstration
 
-A minimal, production-ready LLM firewall demonstration built using LiteLLM Proxy.
+A minimal, production-ready LLM Gateway InferenceGate demonstration built using LiteLLM Proxy.
 
 ## Purpose
 This project provides a reference implementation for a secure AI gateway. It demonstrates how to intercept, assess, and filter LLM requests using both **deterministic regex/keyword rules** and **probabilistic model-based assessment** (Llama Guard).
@@ -10,7 +10,7 @@ This project provides a reference implementation for a secure AI gateway. It dem
 [ User / App ] 
       |
       v
-[ LiteLLM Firewall Proxy ] <--- [ config.yaml ]
+[ InferenceGate Proxy ] <--- [ config.yaml ]
       |      |
       |      +-- Phase 1: Built-in Filters (Regex/Keywords)
       |      +-- Phase 2: Llama-Guard-3 Content Assessment

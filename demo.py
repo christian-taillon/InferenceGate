@@ -47,12 +47,11 @@ TEST_PROMPTS = [
 ]
 
 def start_proxy():
-    print(f"\n{BOLD}🚀 BOOTING LITELLM FIREWALL GATEWAY...{RESET}")
+    print(f"\n{BOLD}🚀 BOOTING INFERENCEGATE GATEWAY...{RESET}")
     print(f"{DIM}   Port: {PROXY_PORT} | Log: {DEBUG_LOG}{RESET}")
     
     with open(DEBUG_LOG, "w") as log_f:
         proxy_env = os.environ.copy()
-        # Ensure we have some fake keys if not present to avoid proxy errors
         if "LITELLM_API_KEY" not in proxy_env: proxy_env["LITELLM_API_KEY"] = "sk-fake"
         if "LITELLM_API_BASE" not in proxy_env: proxy_env["LITELLM_API_BASE"] = "http://localhost:9999"
 
@@ -68,19 +67,19 @@ def start_proxy():
     for _ in range(30):
         try:
             requests.get(f"http://localhost:{PROXY_PORT}/health/readiness")
-            print(f"   {GREEN}✅ FIREWALL GATEWAY IS ONLINE!{RESET}      ")
+            print(f"   {GREEN}✅ INFERENCEGATE IS ONLINE!{RESET}      ")
             return proxy
         except:
             time.sleep(1)
     
-    print(f"   {RED}❌ FIREWALL GATEWAY FAILED TO START{RESET}")
+    print(f"   {RED}❌ INFERENCEGATE FAILED TO START{RESET}")
     return None
 
 def run_tests():
-    client = OpenAI(api_key="sk-firewall-client", base_url=PROXY_URL)
+    client = OpenAI(api_key="sk-inference-gate-client", base_url=PROXY_URL)
     
     print("\n" + "="*60)
-    print(f"      {BOLD}🛡️  LITELLM FIREWALL CLIENT DEMONSTRATION{RESET}")
+    print(f"      {BOLD}🛡️  INFERENCEGATE CLIENT DEMONSTRATION{RESET}")
     print("="*60)
     print(f"{DIM}Note: All safety logic is remote on the Gateway.{RESET}")
 
@@ -106,10 +105,6 @@ def run_tests():
             elapsed = time.time() - start_time
             error_msg = str(e)
             
-            # Print raw error for debugging
-            # print(f"\nDEBUG: RAW ERROR: {error_msg}")
-            
-            # Determine if it's a block or an error
             is_block = any(token in error_msg.lower() for token in ["403", "blocked", "400", "moderation", "guardrail"])
             
             status_label = " BLOCKED " if is_block else " ERROR   "
@@ -122,9 +117,6 @@ def run_tests():
             phase = "UNKNOWN"
             
             if "content blocked" in error_msg.lower():
-                # Extract reason from LiteLLM's error format
-                # e.g. Content blocked: email pattern detected
-                # or Content blocked: keyword 'secret@example.com' detected
                 if "pattern detected" in error_msg.lower():
                     pat_match = re.search(r'Content blocked: (.*?) pattern detected', error_msg, re.IGNORECASE)
                     if pat_match:
@@ -136,7 +128,6 @@ def run_tests():
                         reason = f"Keyword Filter: '{kw_match.group(1)}' blocked."
                         phase = "PHASE 1 (Deterministic)"
             elif "blocked by llamaguard" in error_msg.lower():
-                # Extract taxonomy categories if present
                 taxonomy_match = re.search(r'Categories: (.*)', error_msg, re.IGNORECASE)
                 if taxonomy_match:
                     reason = f"Llama-Guard: {taxonomy_match.group(1)}."
@@ -168,5 +159,5 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             pass
         finally:
-            print(f"\n{BOLD}Shutting down firewall proxy...{RESET}")
+            print(f"\n{BOLD}Shutting down InferenceGate proxy...{RESET}")
             os.killpg(os.getpgid(proxy.pid), signal.SIGTERM)
