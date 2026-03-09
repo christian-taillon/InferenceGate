@@ -91,4 +91,29 @@ This document outlines the strategic phases for evolving this demonstration into
 
 ---
 
+## Phase 5: Comprehensive Validation Pass ✅
+**Objective:** Thorough end-to-end validation of all code, config, tests, docs, and CI pipeline.
+
+### Validation Battery (T1–T10): All PASS
+1.  **T1 — Pytest Suite:** ✅ 39/39 tests passing (`3.49s`)
+2.  **T2 — Static Analysis (ruff):** ✅ Clean — no warnings or errors
+3.  **T3 — Config Validation:** ✅ `config.yaml` parses; all 3 custom regex patterns compile
+4.  **T4 — Regex vs TEST_PROMPTS:** ✅ 0 false positives, 0 false negatives across 24 prompts
+5.  **T5 — LlamaGuardShield:** ✅ Instantiation, taxonomy (14 entries), empty-input handling, message extraction all verified
+6.  **T6 — Syntax Checks:** ✅ `py_compile` clean on `serve.py`, `demo.py`, `firewall_callbacks.py`
+7.  **T7 — GitHub Actions:** ✅ Valid YAML, correct action versions, correct commands
+8.  **T8 — Code Quality:** ✅ Unused imports removed from `firewall_callbacks.py` and `serve.py`
+9.  **T9 — Documentation:** ✅ Stale "Brand Protection" replaced; master key defaults aligned across `serve.py`/`demo.py`
+10. **T10 — Final Report:** ✅ No open issues remaining (INFO severity only)
+
+### Fixes Applied:
+- `firewall_callbacks.py`: Removed unused imports (`asyncio`, `Dict`, `List`, `Union`); added defensive null-checks on LlamaGuard response parsing
+- `serve.py`: Removed unused `time` import
+- `demo.py`: Aligned default master key to `sk-inference-gate-v1`; corrected prompt labels `(Regex)` → `(Built-in)` for prebuilt detections (SSN, IBAN, AWS KEY)
+- `README.md`: Replaced stale "Brand Protection" with accurate feature descriptions; updated Customization section
+
+### Commit: `429ab97`
+
+---
+
 **Philosophy:** Maintain the "Lite" in LiteLLM. Avoid over-engineering; prefer native features over custom code whenever they meet the security bar.
