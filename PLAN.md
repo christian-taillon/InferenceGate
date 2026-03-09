@@ -75,9 +75,11 @@ This document outlines the strategic phases for evolving this demonstration into
     *   SQL Injection regex matches common English words ("select", "update")
     *   Prompt Injection regex matches benign "you are now" phrases
     *   **Next step:** Refine regexes with context-aware patterns (e.g., require SQL syntax after keyword, not just `\b...\b.*`)
-3.  **CI/CD Pipeline:** ⬜ Not yet implemented
-    *   Add GitHub Actions workflow for automated test runs
-    *   Add pre-commit hooks for linting (ruff) and testing
+3.  **CI/CD Pipeline:** ⏳ In progress
+    *   Add GitHub Actions workflow for automated test runs ✅ (`.github/workflows/test.yml`)
+    *   Validation: `.venv/bin/python -c "import yaml; yaml.safe_load(open('.github/workflows/test.yml')); print('YAML valid')"` -> `YAML valid`
+    *   Changed files: `.github/workflows/test.yml`, `PLAN.md`
+    *   Add pre-commit hooks for linting (ruff) and testing ⬜
 
 ### Decisions:
 - Tests use import shims to run without live LLM backend or LiteLLM proxy
