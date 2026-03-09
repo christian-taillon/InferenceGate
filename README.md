@@ -20,11 +20,11 @@ This project provides a reference implementation for a secure AI gateway. It dem
 
 ## Features
 
-### Phase 1: Built-in Content Filters (Regex & Keywords)
+### Phase 1: Built-in Content Filters (Regex & Prebuilt Detection)
 Zero-latency, on-device guardrails:
-- **PII Blocking**: Automatically prevents leakage of sensitive data (e.g., restricted emails).
-- **Prompt Injection Protection**: Blocks common "jailbreak" and instruction-override attempts.
-- **Brand Protection**: Enforces corporate safety by blocking competitor mentions.
+- **PII and Secret Blocking**: Automatically prevents leakage of emails, SSNs, IBANs, API keys, JWTs, and similar sensitive values.
+- **Prompt Injection Protection**: Blocks common jailbreak and instruction-override attempts.
+- **Attack Pattern Detection**: Blocks common SQL injection payloads before they reach the upstream model.
 
 ### Phase 2: Llama-Guard-3 Content Assessment
 Advanced intent analysis using a specialized safety model:
@@ -63,7 +63,7 @@ uv run demo.py --delay 2
 ```
 
 ## Customization
-Modify `config.yaml` to add your own restricted keywords or adjust the safety thresholds. The logic is fully decoupled from the application code, allowing for security updates without re-deploying your main service.
+Modify `config.yaml` to add your own regex or prebuilt detection rules, or adjust the safety thresholds. The logic is fully decoupled from the application code, allowing for security updates without re-deploying your main service.
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.

@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-import time
 import socket
 from dotenv import load_dotenv
 
@@ -15,13 +14,15 @@ RESET = "\033[0m"
 
 load_dotenv()
 
+
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
+        return s.connect_ex(("localhost", port)) == 0
+
 
 def run_service():
     port = 8001
-    
+
     if is_port_in_use(port):
         print(f"{YELLOW}Warning: Port {port} is already in use.{RESET}")
         print(f"Try running: {BOLD}pkill -f litellm{RESET}")
@@ -44,13 +45,14 @@ def run_service():
     try:
         process = subprocess.Popen(
             [".venv/bin/litellm", "--config", "config.yaml", "--port", str(port)],
-            env=env
+            env=env,
         )
         process.wait()
     except KeyboardInterrupt:
         print(f"\n{BOLD}Stopping InferenceGate...{RESET}")
     except Exception as e:
         print(f"\n{BOLD}Error: {e}{RESET}")
+
 
 if __name__ == "__main__":
     run_service()

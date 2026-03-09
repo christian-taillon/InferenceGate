@@ -1,9 +1,11 @@
 import litellm
-from litellm.integrations.custom_guardrail import CustomGuardrail, log_guardrail_information
+from litellm.integrations.custom_guardrail import (
+    CustomGuardrail,
+    log_guardrail_information,
+)
 from litellm.exceptions import BadRequestError
 import os
-import asyncio
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Optional, Literal
 
 # Llama Guard 3 Taxonomy (S1-S14)
 # Note: S14 (Code Interpreter Abuse) is specific to the 8B model but included for future-proofing.
@@ -21,8 +23,9 @@ LLAMA_GUARD_TAXONOMY = {
     "S11": "Suicide & Self-Harm",
     "S12": "Sexual Content",
     "S13": "Elections",
-    "S14": "Code Interpreter Abuse"
+    "S14": "Code Interpreter Abuse",
 }
+
 
 class LlamaGuardShield(CustomGuardrail):
     """
@@ -30,6 +33,7 @@ class LlamaGuardShield(CustomGuardrail):
     Provides granular safety assessment using the Llama Guard 3 taxonomy.
     Supports both sequential (pre_call) and parallel (during_call) execution.
     """
+
     def __init__(self, **kwargs):
         # Allow overriding the model for local hosting (e.g., ollama/llama-guard3:1b)
         self.guard_model = os.getenv("LLAMA_GUARD_MODEL", "openai/llama-guard3:1b")
@@ -45,15 +49,17 @@ class LlamaGuardShield(CustomGuardrail):
             return
 
         print(f"DEBUG: LlamaGuard checking prompt: {user_content[:50]}...")
-        
+
         try:
             api_base = os.getenv("LITELLM_API_BASE")
             api_key = os.getenv("LITELLM_API_KEY")
-            
+
             if not api_base:
-                print("DEBUG: LlamaGuard error - LITELLM_API_BASE not set in environment.")
+                print(
+                    "DEBUG: LlamaGuard error - LITELLM_API_BASE not set in environment."
+                )
                 return
-            
+
             # Request Llama Guard 3 verdict
             response = await litellm.acompletion(
                 model=self.guard_model,
@@ -61,34 +67,48 @@ class LlamaGuardShield(CustomGuardrail):
                 api_base=api_base,
                 api_key=api_key,
                 temperature=0,
-                max_tokens=20
+                max_tokens=20,
             )
-            
-            raw_content = response.choices[0].message.content.strip()
+
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                print("DEBUG: LlamaGuard returned no choices.")
+                return
+
+            message = getattr(choices[0], "message", None)
+            raw_content = (getattr(message, "content", "") or "").strip()
+            if not raw_content:
+                print("DEBUG: LlamaGuard returned empty content.")
+                return
+
             print(f"DEBUG: LlamaGuard Raw Output: {raw_content}")
-            
+
             # Standard Llama Guard output:
             # line 1: safe | unsafe
             # line 2: S1,S2 (if unsafe)
-            lines = raw_content.split('\n')
+            lines = raw_content.split("\n")
             verdict = lines[0].strip().lower()
-            
+
             if "unsafe" in verdict:
                 categories = []
                 if len(lines) > 1:
-                    codes = lines[1].split(',')
+                    codes = lines[1].split(",")
                     for code in codes:
                         code = code.strip()
-                        category_name = LLAMA_GUARD_TAXONOMY.get(code, "Policy Violation")
+                        category_name = LLAMA_GUARD_TAXONOMY.get(
+                            code, "Policy Violation"
+                        )
                         categories.append(f"{code}: {category_name}")
-                
-                reason_str = ", ".join(categories) if categories else "General Safety Violation"
+
+                reason_str = (
+                    ", ".join(categories) if categories else "General Safety Violation"
+                )
                 print(f"DEBUG: BLOCKING via LlamaGuard. Categories: {reason_str}")
-                
+
                 raise BadRequestError(
                     message=f"🛡️ Blocked by LlamaGuard (Probabilistic Shield). Categories: {reason_str}",
                     model=model_name,
-                    llm_provider="llama-guard"
+                    llm_provider="llama-guard",
                 )
         except BadRequestError as e:
             raise e
@@ -98,10 +118,7 @@ class LlamaGuardShield(CustomGuardrail):
 
     @log_guardrail_information
     async def async_moderation_hook(
-        self,
-        data: dict,
-        user_api_key_dict: Any,
-        call_type: Any = None
+        self, data: dict, user_api_key_dict: Any, call_type: Any = None
     ) -> dict:
         """
         Parallel Hook: Runs alongside the main LLM call.
@@ -113,7 +130,7 @@ class LlamaGuardShield(CustomGuardrail):
             if m.get("role") == "user":
                 user_content = m.get("content", "")
                 break
-        
+
         await self._run_llama_guard(user_content, data.get("model", "unknown"))
         return data
 
@@ -136,10 +153,11 @@ class LlamaGuardShield(CustomGuardrail):
             texts = inputs.get("texts", [])
         except AttributeError:
             texts = getattr(inputs, "texts", [])
-            
+
         user_content = " ".join(texts)
         await self._run_llama_guard(user_content, request_data.get("model", "unknown"))
         return inputs
+
 
 # Export instance
 llama_shield_instance = LlamaGuardShield()

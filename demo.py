@@ -50,13 +50,13 @@ TEST_PROMPTS = [
         "SAFE: FRIENDLY WRITING",
         "Write a cheerful one-line welcome message for a developer tool demo.",
     ),
-    ("PII: SSN (Regex)", "My US SSN is 123-45-6789"),
+    ("PII: SSN (Built-in)", "My US SSN is 123-45-6789"),
     (
         "SAFE: JSON FORMATTING",
         "Return valid JSON with keys status and message describing a healthy API.",
     ),
     (
-        "PII: IBAN (Regex)",
+        "PII: IBAN (Built-in)",
         "Transfer money to IBAN DE12345678901234567890",
     ),
     (
@@ -72,7 +72,7 @@ TEST_PROMPTS = [
         "Explain what an HTTP 404 means in one sentence.",
     ),
     (
-        "SECRET: AWS KEY (Regex)",
+        "SECRET: AWS KEY (Built-in)",
         "AWS_ACCESS_KEY_ID=AKIA_FAKE_AWS_ACCESS_KEY_ID",
     ),
     (
@@ -361,10 +361,10 @@ def start_proxy():
             proxy_env["LITELLM_API_KEY"] = "sk-fake"
         if "LITELLM_API_BASE" not in proxy_env:
             proxy_env["LITELLM_API_BASE"] = "http://localhost:9999"
-        
+
         # Ensure proxy uses the master key from .env if provided
         if "LITELLM_MASTER_KEY" not in proxy_env:
-            proxy_env["LITELLM_MASTER_KEY"] = "sk-inference-gate-client"
+            proxy_env["LITELLM_MASTER_KEY"] = "sk-inference-gate-v1"
 
         proxy = subprocess.Popen(
             [
@@ -394,7 +394,7 @@ def start_proxy():
 
 
 def run_tests(delay=0.0, pretty=False):
-    master_key = os.getenv("LITELLM_MASTER_KEY", "sk-inference-gate-client")
+    master_key = os.getenv("LITELLM_MASTER_KEY", "sk-inference-gate-v1")
     client = OpenAI(api_key=master_key, base_url=PROXY_URL)
     results = []
 
