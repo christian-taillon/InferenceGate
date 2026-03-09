@@ -55,11 +55,11 @@ guardrails:
         # LLM Attack Patterns
         - pattern_type: "regex"
           name: "SQL Injection"
-          pattern: "(?i)\\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE)\\b.*"
+          pattern: "(?i)(\\bSELECT\\s+(\\*|[\\w.]+(\\s*,\\s*[\\w.]+)*)\\s+FROM\\b|\\bINSERT\\s+INTO\\b|\\bUPDATE\\s+\\w+\\s+SET\\b|\\bDELETE\\s+FROM\\b|\\bDROP\\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA)\\b|\\bCREATE\\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA)\\b|\\bALTER\\s+(TABLE|DATABASE|SCHEMA)\\b|\\bTRUNCATE\\s+(TABLE\\s+)?\\w+|\\bGRANT\\s+(ALL|SELECT|INSERT|UPDATE|DELETE|EXECUTE|ALTER|CREATE|DROP)\\b|\\bREVOKE\\s+(ALL|SELECT|INSERT|UPDATE|DELETE|EXECUTE|ALTER|CREATE|DROP)\\b|\\bUNION\\s+(ALL\\s+)?SELECT\\b|\\bEXEC(UTE)?\\s+(xp_|sp_)\\w+|;\\s*(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)\\b|\\bOR\\s+[\\x27\"]?\\d+[\\x27\"]?\\s*=\\s*[\\x27\"]?\\d+[\\x27\"]?|\\bAND\\s+[\\x27\"]?\\d+[\\x27\"]?\\s*=\\s*[\\x27\"]?\\d+[\\x27\"]?)"
           action: "BLOCK"
         - pattern_type: "regex"
           name: "Prompt Injection"
-          pattern: "(?i)\\b(ignore (all )?previous instructions|system prompt|DAN mode|you are now|act as a)\\b"
+          pattern: "(?i)\\b(ignore\\s+(all\\s+)?previous\\s+instructions\\b|system\\s+prompt\\b|DAN\\s+mode\\b|you\\s+are\\s+now\\s+(a|an)\\b|act\\s+as\\s+(a|an)\\b)"
           action: "BLOCK"
 
   # Phase 2: Custom Llama Guard integration (Sequential fallback)
