@@ -27,17 +27,19 @@ def run_service():
         print(f"Try running: {BOLD}pkill -f litellm{RESET}")
         sys.exit(1)
 
+    master_key = os.getenv("LITELLM_MASTER_KEY", "sk-inference-gate-v1")
+
     print(f"\n{BOLD}{GREEN}      🛡️  INFERENCEGATE PROXY IS ONLINE{RESET}")
     print(f"{DIM}=================================================={RESET}")
     print(f"  {CYAN}Port:{RESET}      {BOLD}{port}{RESET}")
     print(f"  {CYAN}Config:{RESET}    {BOLD}config.yaml{RESET}")
-    print(f"  {CYAN}API Key:{RESET}   {BOLD}sk-inference-gate-v1{RESET}")
+    print(f"  {CYAN}API Key:{RESET}   {BOLD}{master_key}{RESET}")
     print(f"  {CYAN}Model:{RESET}     {BOLD}firewall-model{RESET}")
     print(f"{DIM}=================================================={RESET}\n")
 
     # Set master key for proxy auth
     env = os.environ.copy()
-    env["LITELLM_MASTER_KEY"] = "sk-inference-gate-v1"
+    env["LITELLM_MASTER_KEY"] = master_key
 
     try:
         process = subprocess.Popen(

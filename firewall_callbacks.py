@@ -47,8 +47,12 @@ class LlamaGuardShield(CustomGuardrail):
         print(f"DEBUG: LlamaGuard checking prompt: {user_content[:50]}...")
         
         try:
-            api_base = os.getenv("LITELLM_API_BASE", "https://api.your-provider.com")
+            api_base = os.getenv("LITELLM_API_BASE")
             api_key = os.getenv("LITELLM_API_KEY")
+            
+            if not api_base:
+                print("DEBUG: LlamaGuard error - LITELLM_API_BASE not set in environment.")
+                return
             
             # Request Llama Guard 3 verdict
             response = await litellm.acompletion(
