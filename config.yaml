@@ -2,8 +2,8 @@ model_list:
   - model_name: firewall-model
     litellm_params:
       model: "openai/qwen3.5:35b-ctx100k"
-      api_base: "https://ai.christiant.io/api"
-      api_key: "sk-a39c999114c34e709198d1a1773b58cf"
+      api_base: "os.environ/LITELLM_API_BASE"
+      api_key: "os.environ/LITELLM_API_KEY"
       guardrails:
         - inference-gate
         - llama-guard
