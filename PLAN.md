@@ -62,29 +62,32 @@ This document outlines the strategic phases for evolving this demonstration into
 
 ---
 
-## Phase 4: Automated Testing & CI Readiness
+## Phase 4: Automated Testing & CI Readiness ✅
 **Objective:** Ensure regression safety with automated tests and prepare for CI/CD integration.
 
 ### Tasks:
-1.  **Unit Test Suite:** ✅ `tests/test_firewall.py` — 29 tests (26 pass, 3 xfail)
+1.  **Unit Test Suite:** ✅ `tests/test_firewall.py` — **39 tests, all passing**
     *   Regex pattern matching (JWT, SQL injection, prompt injection)
     *   Llama Guard taxonomy integrity (S1-S14)
     *   Error parsing logic (`parse_error` from demo.py)
     *   Config.yaml structure validation
-2.  **Known False Positives (xfail):** Documented regex limitations:
-    *   SQL Injection regex matches common English words ("select", "update")
-    *   Prompt Injection regex matches benign "you are now" phrases
-    *   **Next step:** Refine regexes with context-aware patterns (e.g., require SQL syntax after keyword, not just `\b...\b.*`)
-3.  **CI/CD Pipeline:** ⏳ In progress
-    *   Add GitHub Actions workflow for automated test runs ✅ (`.github/workflows/test.yml`)
-    *   Validation: `.venv/bin/python -c "import yaml; yaml.safe_load(open('.github/workflows/test.yml')); print('YAML valid')"` -> `YAML valid`
-    *   Changed files: `.github/workflows/test.yml`, `PLAN.md`
-    *   Add pre-commit hooks for linting (ruff) and testing ⬜
+2.  **Regex Refinement:** ✅ All false positives resolved
+    *   SQL Injection: Context-aware patterns requiring SQL structural syntax (SELECT...FROM, UPDATE...SET, INSERT INTO, etc.) + stacked query + OR/AND tautology detection
+    *   Prompt Injection: Requires article (a/an) after "you are now" and "act as" to distinguish attacks from benign text
+    *   Zero xfail markers remaining — all 39 tests pass cleanly
+3.  **CI/CD Pipeline:** ✅ `.github/workflows/test.yml`
+    *   GitHub Actions runs pytest on push/PR to `main`
+    *   Test matrix: Python 3.12 and 3.13
+    *   Uses `uv` for fast dependency management
+    *   Optional ruff lint check (non-blocking)
+    *   ⬜ Pre-commit hooks for linting (ruff) — future enhancement
 
 ### Decisions:
 - Tests use import shims to run without live LLM backend or LiteLLM proxy
 - `pytest>=8.0.0` added as optional dev dependency (`pip install -e ".[dev]"`)
 - README.md port reference corrected from 4000 to 8001
+- SQL regex uses compound SQL-syntax patterns instead of bare keyword matching
+- Prompt injection regex requires role-assignment context (a/an) after "you are now"
 
 ---
 
