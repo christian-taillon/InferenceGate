@@ -49,7 +49,7 @@ To run the firewall as a persistent service for Open WebUI or other apps:
 ```bash
 uv run serve.py
 ```
-This will start the proxy on port 4000 and print connection instructions.
+This will start the proxy on port 8001 and print connection instructions.
 
 ## Running the Demonstration
 Run the automated test suite to see the firewall in action:
