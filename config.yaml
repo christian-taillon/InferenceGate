@@ -1,12 +1,14 @@
 model_list:
   - model_name: firewall-model
     litellm_params:
-      model: "openai/qwen3.5:35b-ctx100k"
+      model: "os.environ/MODEL"
       api_base: "os.environ/LITELLM_API_BASE"
       api_key: "os.environ/LITELLM_API_KEY"
       guardrails:
         - inference-gate
+        - llama-prompt-guard
         - llama-guard
+        - response-guard
 
 litellm_settings:
   set_verbose: False
@@ -62,9 +64,23 @@ guardrails:
           pattern: "(?i)\\b(ignore\\s+(all\\s+)?previous\\s+instructions\\b|system\\s+prompt\\b|DAN\\s+mode\\b|you\\s+are\\s+now\\s+(a|an)\\b|act\\s+as\\s+(a|an)\\b)"
           action: "BLOCK"
 
-  # Phase 2: Custom Llama Guard integration (Sequential fallback)
+  # Phase 2: Prompt attack classifier for jailbreaks and prompt injections
+  - guardrail_name: "llama-prompt-guard"
+    litellm_params:
+      guardrail: firewall_callbacks.LlamaPromptGuardShield
+      mode: "pre_call"
+      default_on: true
+
+  # Phase 3: Custom Llama Guard integration for harmful content
   - guardrail_name: "llama-guard"
     litellm_params:
       guardrail: firewall_callbacks.LlamaGuardShield
       mode: "pre_call"
+      default_on: true
+
+  # Phase 6: Response-side scanning (catches exfil/toxic/secret echo in output)
+  - guardrail_name: "response-guard"
+    litellm_params:
+      guardrail: firewall_callbacks.ResponseGuardShield
+      mode: "post_call"
       default_on: true
