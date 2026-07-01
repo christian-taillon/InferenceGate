@@ -117,4 +117,30 @@ This document outlines the strategic phases for evolving this demonstration into
 
 ---
 
+## Phase 6: Critical Ship-Blockers (Security Hardening)
+**Objective:** Fix the critical flaws identified in `GAP_ANALYSIS.md` that block any production deployment. Grouped by code area to minimize context switching.
+
+### Group A — Shield code (`firewall_callbacks.py` + `config.yaml`)
+These touch the same shield plumbing; do together.
+1. **Response-side scanning** — add `post_call` guardrail(s) to scan model output for exfil/toxic/secret echo (`config.yaml` currently `pre_call` only). **Risk:** data exfiltration via completions.
+2. **Expand shield scope** — `_extract_latest_user_content` only reads latest `user` text (`firewall_callbacks.py:39-53`). Scan full message stack incl. `system`/`developer` and non-text content. **Bypass:** injection via system prompt or prior turns.
+3. **Configurable fail-mode** — shields fail open silently on any exception (`firewall_callbacks.py:349-352, 471-474`). Make fail-open/closed configurable per guardrail; emit a counter on failure.
+4. **Generic client errors** — `BadRequestError` exposes shield labels/categories (`firewall_callbacks.py:341-348`), parsed into user-facing reasons (`demo.py:235-294`). Return generic `request rejected`; keep detail in server logs.
+
+### Group B — Service bootstrap (`serve.py` + `demo.py`)
+5. **Mandatory master key** — refuse to start if `LITELLM_MASTER_KEY` is unset or equals the default `sk-inference-gate-v1` (`serve.py:62-68`, `demo.py:445-453`).
+6. **Redact secrets from logs** — `serve.py:64-85` prints the master key to stdout; demo runs `--detailed_debug` to `proxy_debug.log` (`demo.py:444-466`). Never log credentials.
+
+### Group C — Transport (deployment-layer, docs/ingress)
+7. **TLS termination** — plain HTTP on `:8001` (`serve.py:55,77-80`). Document/require TLS at proxy or ingress; reject plaintext.
+
+### Group D — CI guardrails
+8. **Secret-scanning CI step** — add gitleaks/trufflehog to `.github/workflows/test.yml` to prevent future plaintext leaks.
+
+### Validation
+- Add tests: response-side block, system/developer message scan, non-text content, fail-open/closed toggle, secret-free error text, mandatory-key abort.
+- Run full `pytest` + `ruff`; add a red-team bypass suite.
+
+---
+
 **Philosophy:** Maintain the "Lite" in LiteLLM. Avoid over-engineering; prefer native features over custom code whenever they meet the security bar.

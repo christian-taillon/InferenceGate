@@ -72,3 +72,18 @@ services:
 - **Network Isolation:** Ensure the firewall is the *only* entry point for your LLM applications.
 - **Secret Management:** Use Docker Secrets or Kubernetes Secrets instead of plain `.env` files in production.
 - **Monitoring:** Mount a volume to `/var/log/litellm` and forward logs to a SIEM.
+- **TLS Termination (Required for production):** Never expose port `8001` directly to the internet over plain HTTP. Terminate TLS at a reverse proxy (nginx, Caddy, Traefik) or a Kubernetes ingress. Example nginx:
+  ```nginx
+  server {
+      listen 443 ssl;
+      server_name inference-gate.internal;
+      ssl_certificate     /etc/ssl/inference-gate.crt;
+      ssl_certificate_key /etc/ssl/inference-gate.key;
+      location / {
+          proxy_pass http://firewall-gateway:8001;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto https;
+      }
+  }
+  ```
+  Reject plaintext on port 8001 by not exposing it externally; only the reverse proxy should bind a public interface.

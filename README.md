@@ -3,7 +3,7 @@
 A minimal, production-ready LLM Gateway InferenceGate demonstration built using LiteLLM Proxy.
 
 ## Purpose
-This project provides a reference implementation for a secure AI gateway. It demonstrates how to intercept, assess, and filter LLM requests using both **deterministic regex/keyword rules** and **probabilistic model-based assessment** (Llama Guard).
+This project provides a reference implementation for a secure AI gateway. It demonstrates how to intercept, assess, and filter LLM requests using **deterministic regex/keyword rules**, **prompt-attack classification** (Llama Prompt Guard 2), and **probabilistic safety assessment** (Llama Guard).
 
 ## Architecture
 ```text
@@ -13,7 +13,8 @@ This project provides a reference implementation for a secure AI gateway. It dem
 [ InferenceGate Proxy ] <--- [ config.yaml ]
       |      |
       |      +-- Phase 1: Built-in Filters (Regex/Keywords)
-      |      +-- Phase 2: Llama-Guard-3 Content Assessment
+      |      +-- Phase 2: Llama-Prompt-Guard-2 Injection Assessment
+      |      +-- Phase 3: Llama-Guard-3 Content Assessment
       v
 [ Backend AI Model ] (e.g., Qwen, GPT-4, etc.)
 ```
@@ -26,7 +27,12 @@ Zero-latency, on-device guardrails:
 - **Prompt Injection Protection**: Blocks common jailbreak and instruction-override attempts.
 - **Attack Pattern Detection**: Blocks common SQL injection payloads before they reach the upstream model.
 
-### Phase 2: Llama-Guard-3 Content Assessment
+### Phase 2: Llama-Prompt-Guard-2 Prompt Attack Assessment
+Focused detection for prompt manipulation attempts:
+- **Prompt Injection Detection**: Catches prompts trying to override hidden or developer instructions.
+- **Jailbreak Detection**: Blocks known jailbreak-style attempts even when they do not match the static regex rules.
+
+### Phase 3: Llama-Guard-3 Content Assessment
 Advanced intent analysis using a specialized safety model:
 - **Violent Content Detection**: Detects and blocks prompts about harmful activities (S9).
 - **Criminal Intent Detection**: Detects and blocks prompts about theft or illegal acts (S2).
@@ -55,6 +61,12 @@ This will start the proxy on port 8001 and print connection instructions.
 Run the automated test suite to see the firewall in action:
 ```bash
 uv run demo.py
+```
+
+Or use the helper script to pick a `.env`, start the demo, or launch the server:
+```bash
+./scripts/run-demo-stack.sh
+./scripts/run-demo-stack.sh serve
 ```
 
 For an auto-advancing version of the demo, pass a delay in seconds:

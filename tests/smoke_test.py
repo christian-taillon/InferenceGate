@@ -9,6 +9,7 @@ This script is NOT run by pytest or CI - it requires live credentials.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -19,7 +20,8 @@ from openai import OpenAI
 
 
 def default_model() -> str:
-    with Path("config.yaml").open(encoding="utf-8") as handle:
+    config_path = Path(os.environ.get("LITELLM_CONFIG", "config.yaml"))
+    with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
     model = config["model_list"][0]["litellm_params"]["model"]
     return model.removeprefix("openai/")
@@ -36,12 +38,15 @@ def main() -> int:
         return 1
 
     env = dotenv_values(env_path)
-    base_url = env.get("LITELLM_API_BASE")
-    api_key = env.get("LITELLM_API_KEY")
+    base_url = env.get("LITELLM_API_BASE") or env.get("baseURL")
+    api_key = env.get("LITELLM_API_KEY") or env.get("OPENAI_API_KEY")
     model = env.get("MODEL") or default_model()
 
     if not base_url or not api_key:
-        print("FAIL: env file must define LITELLM_API_BASE and LITELLM_API_KEY")
+        print(
+            "FAIL: env file must define provider base URL and API key using either "
+            "LITELLM_API_BASE/LITELLM_API_KEY or baseURL/OPENAI_API_KEY"
+        )
         return 1
 
     host = urlparse(base_url).hostname or "unknown"
@@ -49,14 +54,14 @@ def main() -> int:
     print(f"Model: {model}")
 
     try:
-        client = OpenAI(base_url=base_url, api_key=api_key)
+        client = OpenAI(base_url=base_url, api_key=api_key, max_retries=0)
         response = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "user", "content": "Respond with exactly: INFERENCE_GATE_OK"}
             ],
             temperature=0,
-            max_tokens=20,
+            max_tokens=40,
         )
         content = response.choices[0].message.content or ""
     except Exception as exc:
