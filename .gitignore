@@ -18,6 +18,7 @@ dist/
 # Logs & Debugging
 *.log
 proxy_debug.log
+typescript
 .ruff_cache/
 .pytest_cache/
 

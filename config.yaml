@@ -7,6 +7,7 @@ model_list:
       guardrails:
         - inference-gate
         - llama-prompt-guard
+        - prompt-guard-local
         - llama-guard
         - response-guard
 
@@ -68,6 +69,13 @@ guardrails:
   - guardrail_name: "llama-prompt-guard"
     litellm_params:
       guardrail: firewall_callbacks.LlamaPromptGuardShield
+      mode: "pre_call"
+      default_on: true
+
+  # Phase 2b: Local on-device prompt attack classifier (HuggingFace transformers)
+  - guardrail_name: "prompt-guard-local"
+    litellm_params:
+      guardrail: firewall_callbacks.PromptGuardLocalShield
       mode: "pre_call"
       default_on: true
 

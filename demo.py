@@ -151,12 +151,18 @@ def normalize_provider_environment(env: dict[str, str]) -> dict[str, str]:
 
     if not normalized.get("LITELLM_API_BASE") and normalized.get("baseURL"):
         normalized["LITELLM_API_BASE"] = normalized["baseURL"]
-    if not normalized.get("LITELLM_API_KEY") and normalized.get("OPENAI_API_KEY"):
-        normalized["LITELLM_API_KEY"] = normalized["OPENAI_API_KEY"]
+    if not normalized.get("LITELLM_API_KEY"):
+        normalized["LITELLM_API_KEY"] = (
+            normalized.get("OPENAI_API_KEY")
+            or normalized.get("OLLAMA_API_KEY")
+            or ""
+        )
     if not normalized.get("MODEL"):
-        normalized["MODEL"] = "openai/qwen3.5:35b-ctx100k"
+        normalized["MODEL"] = "openai/qwen3.6:35b-a3b-q4_K_M-ctx128k"
     elif "/" not in normalized["MODEL"] and normalized.get("LITELLM_API_BASE"):
-        normalized["MODEL"] = f"openai/{normalized['MODEL']}"
+        api_base = normalized["LITELLM_API_BASE"]
+        provider = "ollama" if "ollama.com" in api_base else "openai"
+        normalized["MODEL"] = f"{provider}/{normalized['MODEL']}"
 
     return normalized
 
@@ -175,13 +181,13 @@ def load_display_model_name(config_path=None):
         model_list = config.get("model_list") or []
         first_model = model_list[0] if model_list else {}
         litellm_params = first_model.get("litellm_params") or {}
-        model_value = litellm_params.get("model") or "qwen3.5:35b-ctx100k"
+        model_value = litellm_params.get("model") or "qwen3.6:35b-a3b-q4_K_M-ctx128k"
         if isinstance(model_value, str) and model_value.startswith("os.environ/"):
             env_var = model_value.split("/", 1)[1]
-            model_value = os.getenv(env_var, "qwen3.5:35b-ctx100k")
+            model_value = os.getenv(env_var, "qwen3.6:35b-a3b-q4_K_M-ctx128k")
         return model_value.split("/", 1)[-1]
     except Exception:
-        return "qwen3.5:35b-ctx100k"
+        return "qwen3.6:35b-a3b-q4_K_M-ctx128k"
 
 
 DISPLAY_MODEL_NAME = load_display_model_name()
