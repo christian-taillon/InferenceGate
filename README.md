@@ -1,9 +1,9 @@
-# InferenceGate Demonstration
-
-A minimal, production-ready LLM Gateway InferenceGate demonstration built using LiteLLM Proxy.
+# InferenceGate
+ 
+A reference implementation for an enterprise-ready LLM security gateway built using LiteLLM Proxy.
 
 ## Purpose
-This project provides a reference implementation for a secure AI gateway. It demonstrates how to intercept, assess, and filter LLM requests using **deterministic regex/keyword rules**, **prompt-attack classification** (Llama Prompt Guard 2), and **probabilistic safety assessment** (Llama Guard).
+This project provides a secure AI gateway architecture. It demonstrates how to intercept, assess, and filter LLM requests and responses using **deterministic regex/keyword rules**, **local and remote prompt-attack classification** (Llama Prompt Guard 2), and **probabilistic safety assessment** (Llama Guard 3).
 
 ## Architecture
 ```text
@@ -12,9 +12,10 @@ This project provides a reference implementation for a secure AI gateway. It dem
       v
 [ InferenceGate Proxy ] <--- [ config.yaml ]
       |      |
-      |      +-- Phase 1: Built-in Filters (Regex/Keywords)
-      |      +-- Phase 2: Llama-Prompt-Guard-2 Injection Assessment
-      |      +-- Phase 3: Llama-Guard-3 Content Assessment
+      |      +-- Phase 1: Built-in Filters (Regex/PII/Secrets)
+      |      +-- Phase 2: Prompt Attack Assessment (Llama Prompt Guard 2 / Local)
+      |      +-- Phase 3: Content Assessment (Llama Guard 3)
+      |      +-- Phase 4: Response Scanning (Llama Guard 3 post-call)
       v
 [ Backend AI Model ] (e.g., Qwen, GPT-4, etc.)
 ```
@@ -27,15 +28,18 @@ Zero-latency, on-device guardrails:
 - **Prompt Injection Protection**: Blocks common jailbreak and instruction-override attempts.
 - **Attack Pattern Detection**: Blocks common SQL injection payloads before they reach the upstream model.
 
-### Phase 2: Llama-Prompt-Guard-2 Prompt Attack Assessment
+### Phase 2: Prompt Attack Assessment
 Focused detection for prompt manipulation attempts:
-- **Prompt Injection Detection**: Catches prompts trying to override hidden or developer instructions.
-- **Jailbreak Detection**: Blocks known jailbreak-style attempts even when they do not match the static regex rules.
+- **Llama-Prompt-Guard-2**: Catches prompts trying to override hidden or developer instructions.
+- **Local Execution**: Supports loading the guard model locally via `transformers` to eliminate network latency and API dependency.
 
 ### Phase 3: Llama-Guard-3 Content Assessment
 Advanced intent analysis using a specialized safety model:
-- **Violent Content Detection**: Detects and blocks prompts about harmful activities (S9).
-- **Criminal Intent Detection**: Detects and blocks prompts about theft or illegal acts (S2).
+- **Taxonomy-based Blocking**: Detects and blocks prompts based on the full Llama Guard 3 taxonomy (S1-S14), including violent content, criminal intent, and privacy violations.
+
+### Phase 4: Response Content Filtering
+Security doesn't stop at the request:
+- **Output Scanning**: Scans LLM completions for data exfiltration, toxic content, or secret echo, blocking the response before it reaches the client.
 
 ## Setup
 
@@ -44,6 +48,7 @@ Advanced intent analysis using a specialized safety model:
     ```env
     LITELLM_API_BASE='https://your-api-endpoint/v1'
     LITELLM_API_KEY='your-api-key'
+    LITELLM_MASTER_KEY='sk-your-secure-random-key'
     ```
 3.  **Install Dependencies**:
     ```bash
@@ -79,3 +84,4 @@ Modify `config.yaml` to add your own regex or prebuilt detection rules, or adjus
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.
+
