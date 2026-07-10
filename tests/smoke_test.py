@@ -61,7 +61,7 @@ def main() -> int:
                 {"role": "user", "content": "Respond with exactly: INFERENCE_GATE_OK"}
             ],
             temperature=0,
-            max_tokens=40,
+            max_tokens=300,
         )
         content = response.choices[0].message.content or ""
     except Exception as exc:

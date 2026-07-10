@@ -535,6 +535,160 @@ llama_prompt_guard_instance = LlamaPromptGuardShield()
 llama_shield_instance = LlamaGuardShield()
 
 
+class PromptGuardLocalShield(CustomGuardrail):
+    """Local prompt-attack shield using HuggingFace Prompt Guard models.
+
+    Loads a DeBERTa-based text-classification model (e.g.
+    meta-llama/Prompt-Guard-86M or meta-llama/Llama-Prompt-Guard-2-86M)
+    directly via the transformers library. Runs entirely on-device —
+    no API calls, no network dependency.
+
+    Activated when PROMPT_GUARD_LOCAL_MODEL is set. If transformers/torch
+    are not installed, the shield prints a warning and fails open.
+    """
+
+    _model_cache: dict[str, Any] = {}
+
+    def __init__(self, **kwargs):
+        self.model_id = os.getenv(
+            "PROMPT_GUARD_LOCAL_MODEL", "meta-llama/Llama-Prompt-Guard-2-86M"
+        )
+        self.threshold = float(os.getenv("PROMPT_GUARD_LOCAL_THRESHOLD", "0.5"))
+        super().__init__(**kwargs)
+        print(
+            f"DEBUG: PromptGuardLocalShield initialized with model: {self.model_id}"
+        )
+
+    @classmethod
+    def _load_pipeline(cls, model_id: str):
+        if model_id not in cls._model_cache:
+            try:
+                from transformers import pipeline
+            except ImportError as exc:
+                raise ImportError(
+                    "transformers is required for PromptGuardLocalShield. "
+                    "Install with: uv sync --extra local-prompt-guard"
+                ) from exc
+
+            print(f"DEBUG: PromptGuardLocal loading model: {model_id}")
+            cls._model_cache[model_id] = pipeline(
+                "text-classification",
+                model=model_id,
+                truncation=True,
+                max_length=PROMPT_GUARD_MAX_TOKENS,
+            )
+        return cls._model_cache[model_id]
+
+    def _classify_chunk(self, text: str) -> dict[str, Any]:
+        pipe = self._load_pipeline(self.model_id)
+        results = pipe(text)
+
+        if isinstance(results, list):
+            results = results[0] if results else {}
+        if not isinstance(results, dict):
+            return {"label": "", "malicious_score": None, "raw": results}
+
+        label = str(results.get("label", "")).strip().upper()
+        score = results.get("score")
+
+        if label in {"LABEL_0"}:
+            label = "BENIGN"
+        elif label in {"LABEL_1"}:
+            label = "MALICIOUS"
+
+        if label in {"MALICIOUS", "JAILBREAK", "INJECTION", "INJECT"}:
+            malicious_score = float(score) if score is not None else 1.0
+        elif label in {"BENIGN", "SAFE"}:
+            malicious_score = 0.0
+        else:
+            malicious_score = float(score) if score is not None else 0.0
+
+        return {
+            "label": label,
+            "malicious_score": malicious_score,
+            "raw": results,
+        }
+
+    def _is_malicious_result(self, result: dict[str, Any]) -> bool:
+        label = result.get("label", "").strip().lower()
+        if label in {"malicious", "jailbreak", "injection", "inject"}:
+            score = result.get("malicious_score")
+            if score is not None and float(score) < self.threshold:
+                return False
+            return True
+        if label in {"benign", "safe"}:
+            return False
+        return False
+
+    async def _run_local_prompt_guard(self, user_content: str, model_name: str) -> None:
+        if not user_content or not user_content.strip():
+            return
+
+        text_chunks = _chunk_text_for_prompt_guard(user_content)
+        if not text_chunks:
+            return
+
+        print(
+            f"DEBUG: PromptGuardLocal checking {len(text_chunks)} chunk(s)."
+        )
+
+        try:
+            results = await asyncio.to_thread(
+                lambda: [self._classify_chunk(chunk) for chunk in text_chunks]
+            )
+
+            malicious_results = [
+                result for result in results if self._is_malicious_result(result)
+            ]
+            if not malicious_results:
+                return
+
+            raise BadRequestError(
+                message=BLOCKED_MESSAGE,
+                model=model_name,
+                llm_provider="prompt-guard-local",
+            )
+        except BadRequestError as exc:
+            raise exc
+        except ImportError as exc:
+            _handle_shield_error(exc, "PromptGuardLocal")
+        except Exception as exc:
+            _handle_shield_error(exc, "PromptGuardLocal")
+
+    @log_guardrail_information
+    async def async_moderation_hook(
+        self, data: dict, user_api_key_dict: Any, call_type: Any = None
+    ) -> dict:
+        user_content = _extract_all_content(data.get("messages", []))
+        await self._run_local_prompt_guard(user_content, data.get("model", "unknown"))
+        return data
+
+    @log_guardrail_information
+    async def apply_guardrail(
+        self,
+        inputs: Any,
+        request_data: dict,
+        input_type: Literal["request", "response"],
+        logging_obj: Optional[Any] = None,
+    ) -> Any:
+        if input_type != "request":
+            return inputs
+
+        try:
+            texts = inputs.get("texts", [])
+        except AttributeError:
+            texts = getattr(inputs, "texts", [])
+
+        user_content = " ".join(text for text in texts if isinstance(text, str))
+        await self._run_local_prompt_guard(
+            user_content, request_data.get("model", "unknown")
+        )
+        return inputs
+
+
+prompt_guard_local_instance = PromptGuardLocalShield()
+
+
 class ResponseGuardShield(CustomGuardrail):
     """Response-side shield that scans model output for unsafe content.
 

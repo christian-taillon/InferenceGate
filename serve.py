@@ -33,12 +33,18 @@ def normalize_provider_environment(env: dict[str, str]) -> dict[str, str]:
 
     if not normalized.get("LITELLM_API_BASE") and normalized.get("baseURL"):
         normalized["LITELLM_API_BASE"] = normalized["baseURL"]
-    if not normalized.get("LITELLM_API_KEY") and normalized.get("OPENAI_API_KEY"):
-        normalized["LITELLM_API_KEY"] = normalized["OPENAI_API_KEY"]
+    if not normalized.get("LITELLM_API_KEY"):
+        normalized["LITELLM_API_KEY"] = (
+            normalized.get("OPENAI_API_KEY")
+            or normalized.get("OLLAMA_API_KEY")
+            or ""
+        )
     if not normalized.get("MODEL"):
-        normalized["MODEL"] = "openai/qwen3.5:35b-ctx100k"
+        normalized["MODEL"] = "openai/qwen3.6:35b-a3b-q4_K_M-ctx128k"
     elif "/" not in normalized["MODEL"] and normalized.get("LITELLM_API_BASE"):
-        normalized["MODEL"] = f"openai/{normalized['MODEL']}"
+        api_base = normalized["LITELLM_API_BASE"]
+        provider = "ollama" if "ollama.com" in api_base else "openai"
+        normalized["MODEL"] = f"{provider}/{normalized['MODEL']}"
 
     return normalized
 
