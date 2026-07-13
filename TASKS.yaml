@@ -160,13 +160,25 @@ tasks:
   - id: p1.contracts
     title: Control-plane contracts (control types, stages, finding/decision/action schemas)
     phase: p1-contracts
-    status: pending
-    owner_agent: autopilot-codex
-    files: [docs/security/]
+    status: review
+    owner_agent: claude-code (2026-07-12); strict review pending
+    files:
+      - inference_gate/contracts.py
+      - tests/test_contracts.py
+      - docs/security/CONTROL_MODEL.md
     dependencies: [p05.capability-matrix]
     acceptance_criteria: [Strict architecture review passes]
-    tests: []
+    tests: ["uv run pytest tests/test_contracts.py -q  # 16 passed"]
     notes:
+      - >-
+        Implemented as CODE (inference_gate/contracts.py) with
+        docs/security/CONTROL_MODEL.md as the anchor doc - Stage, ControlType,
+        Mode (+D-009 alias parsing, test/enforce rejected), Action
+        (+precedence resolve), Severity, FailureAction+defaults,
+        TenantContext (fail-closed, mapped from verified UserAPIKeyAuth
+        shape), Finding, Decision (recommended vs executed). Changes to
+        precedence/mode semantics/fail-closed behavior require a DECISIONS
+        entry. P2 may proceed while strict review is pending.
       - >-
         Fold the merged-research assessment-event fields into the audit
         contract - event_id, trace_id, session_id, tenant/application/
@@ -432,4 +444,5 @@ tasks:
 
 blockers: []
 
-next_task: p1.contracts
+# p1.contracts sits in review; P2 proceeds against the code contracts.
+next_task: p2.normalization

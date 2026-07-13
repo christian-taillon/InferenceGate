@@ -251,8 +251,17 @@ a `legacy-default` profile until parity tests pass.
   Presidio per-entity action config verified. Deferred to P11/P12:
   data-handling consolidation, version/supply-chain policy docs, custom-auth
   caveats.
-- **Next action:** `p1.contracts` (see TASKS.yaml)
-- **Blockers:** none
+- **P1 contracts implemented as code** (2026-07-12, status `review`):
+  `inference_gate/contracts.py` + 16 tests — Stage/ControlType/Mode/Action/
+  Severity/FailureAction enums, TenantContext (fail-closed, mapped from
+  verified `UserAPIKeyAuth`), Finding, Decision (recommended vs executed).
+  Anchor doc: `docs/security/CONTROL_MODEL.md`. Unit floor now **100**.
+- **Next action:** `p2.normalization` — canonical records (messages, tool
+  calls as first-class fields, responses, streaming chunks) seeded from
+  `_extract_all_content`/`_extract_response_content`, consuming
+  `TenantContext` and `Stage`
+- **Blockers:** none (P1 strict review pending; contracts are cheap to
+  adjust under review feedback)
 
 ---
 

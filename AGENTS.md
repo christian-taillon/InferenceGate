@@ -31,7 +31,7 @@ action, and confirm no plaintext secret entered any log, fixture, or report.
 
 ```bash
 uv sync --extra dev              # install (uv.lock is the source of truth; Python pinned 3.13 — 3.14 breaks the proxy via uvloop)
-uv run pytest tests/ -q          # unit tests — floor: 84 passed
+uv run pytest tests/ -q          # unit tests — floor: 100 passed
 uv run pytest -m integration -q  # live proxy vs stub upstream — floor: 4 passed, no creds needed
 uv run ruff check .              # lint — baseline: clean
 uv run python serve.py --env .env       # run the proxy on :8001 (needs real .env)
@@ -45,8 +45,12 @@ proxy or provider. `demo.py` and `smoke_test.py` need real provider creds.
 
 ## Repository constraints
 
-- **Test floor is 84 unit + 4 integration** (legacy baseline was 78; the "39"
-  in older docs is stale). Never finish with fewer passing tests than the floor.
+- **Test floor is 100 unit + 4 integration** (legacy baseline was 78; the
+  "39" in older docs is stale). Never finish with fewer passing tests than
+  the floor.
+- `inference_gate/contracts.py` is the normative control-plane vocabulary
+  (P1). Changing Action precedence, Mode semantics, or TenantContext
+  fail-closed behavior requires a DECISIONS.md entry.
 - LiteLLM is pinned at **1.82.0** via `uv.lock`. `requirements.txt` is a stale
   legacy export (Mar 2026) — do not install from it; see DECISIONS.md D-002.
 - Python >=3.10; CI runs 3.12 and 3.13 with `uv`. Gitleaks already runs in CI.
