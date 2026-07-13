@@ -231,3 +231,44 @@ Never rewrite or delete prior entries. Newest entry last.
   it lean: verify only what P1–P5 depend on (spend-log content, streaming
   iterator buffering, virtual-key context shape, custom-auth caveats,
   Presidio guardrail modes); defer enterprise feature research.
+
+---
+
+## 2026-07-12 (later) — Committed; P0.5 capability matrix complete
+
+- **Agent:** Claude Code (claude-fable-5), interactive session
+- **Task IDs:** p05.capability-matrix (completed) → **current phase P1**
+- **Commits:** `d0d6558` (work-state system + design docs), `a381644`
+  (content-free logging, debug gating, tool_call scanning, leak tests),
+  `9336adc` (integration suite, litellm/Python pins, CI). Tree clean;
+  nothing pushed.
+- **Files changed after commits:**
+  `docs/security/LITELLM_CAPABILITY_MATRIX.md` (new), D-005 update in
+  `DECISIONS.md`, TASKS/PLAN advanced to P1.
+- **Verified findings (installed 1.82.0 source):**
+  - **Spend logs are content-free by default** — prompts/responses stored
+    only with `store_prompts_in_spend_logs: true` (general_settings or env);
+    `turn_off_message_logging` redacts callback payloads
+    (spend_tracking_utils.py:879-895).
+  - **UserAPIKeyAuth** carries team_id/org_id/user_id/key_alias/end_user_id/
+    metadata, and auto-hashes `api_key` in a validator — hooks receive a
+    non-secret key identifier (maps directly to our virtual_key_id).
+  - **Native streaming guardrails are unsafe for enforcement**: default
+    sampling_rate=5 (scan every 5th chunk over accumulated text),
+    chunks yielded to the client before inspection; upstream comment admits
+    a mid-stream block cannot send an error ("Response already started").
+    → buffer_then_release is a build item (P12), attachment point adopted.
+  - Presidio guardrail params verified (analyzer/anonymizer bases,
+    output_parse_pii, per-entity `pii_entities_config` actions).
+  - Model access groups + guardrail load balancing + per-guardrail
+    Prometheus metrics confirmed present (adopt/wrap in P4/P11).
+- **Deferred per D-010:** LITELLM_DATA_HANDLING/VERSION_POLICY/SUPPLY_CHAIN
+  docs (P12), custom-auth caveats (P11).
+- **Tests:** unchanged (84 unit + 4 integration, ruff clean) — docs-only
+  changes since last run.
+- **Exact next action:** `p1.contracts` — write CONTROL_MODEL.md, STAGES.md,
+  FINDING_SCHEMA.md, DECISION_SCHEMA.md, ACTION_MODEL.md, POLICY_MODEL.md,
+  POLICY_PRECEDENCE.md, FAILURE_POLICY.md in docs/security/, folding in the
+  assessment-event fields (p1 task notes) and the UserAPIKeyAuth→tenant
+  context mapping (capability matrix consequence #1). Gate: strict
+  architecture review before any engine code.
