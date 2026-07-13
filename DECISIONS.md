@@ -86,6 +86,11 @@ Statuses: `proposed` · `accepted` · `superseded` · `rejected`
   leak tests pass. Interim posture for sensitive profiles: buffer-complete or
   disable streaming. Evaluate `async_post_call_streaming_iterator_hook` at
   1.82.0 during Phase 0.5.
+- **Update 2026-07-12 (p05 verification):** native streaming guardrail mode
+  confirmed unsafe for enforcement — it samples every 5th chunk and yields
+  chunks to the client before inspection; litellm's own comment: "Response
+  already started ... cannot send 400". `buffer_then_release` must be built
+  as our own iterator on that hook (see LITELLM_CAPABILITY_MATRIX.md).
 - **Consequences:** honest security posture; streaming work lands in Phase 12
   with explicit tests (prefix split, JWT split, placeholder split, UTF-8
   boundaries, mid-stream provider failure).

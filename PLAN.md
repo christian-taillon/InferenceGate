@@ -241,7 +241,17 @@ a `legacy-default` profile until parity tests pass.
   provider call entirely. See `docs/security/LITELLM_INTEGRATION.md`.
 - **CORS finding:** litellm 1.82.0 hardcodes `origins=["*"]` — no config
   knob; enforce at ingress (`docs/security/OPERATIONS.md`).
-- **Next action:** `p05.capability-matrix` (see TASKS.yaml)
+- **P0.5 COMPLETE** (2026-07-12, lean scope per D-010):
+  `docs/security/LITELLM_CAPABILITY_MATRIX.md` — all verified against
+  installed 1.82.0. Highlights: spend logs are content-free by default
+  (`store_prompts_in_spend_logs` off); `UserAPIKeyAuth` provides
+  team/org/user/end-user IDs with the api key auto-hashed (free non-secret
+  virtual_key_id); native streaming guardrails sample every 5th chunk and
+  yield before inspection — `buffer_then_release` must be built (P12);
+  Presidio per-entity action config verified. Deferred to P11/P12:
+  data-handling consolidation, version/supply-chain policy docs, custom-auth
+  caveats.
+- **Next action:** `p1.contracts` (see TASKS.yaml)
 - **Blockers:** none
 
 ---

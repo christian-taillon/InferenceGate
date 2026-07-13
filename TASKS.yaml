@@ -6,7 +6,7 @@ updated_at: 2026-07-12
 # Phase definitions and gates: PLAN.md § "Transformation Program (v2)".
 # Target spec: docs/security/OBJECTIVE.md
 
-current_phase: p05-litellm-assessment
+current_phase: p1-contracts
 overall_status: in_progress
 
 tasks:
@@ -127,14 +127,11 @@ tasks:
   - id: p05.capability-matrix
     title: Build LiteLLM 1.82.0 capability matrix (adopt/wrap/build/defer/reject)
     phase: p05-litellm-assessment
-    status: pending
-    owner_agent: search-ollama + autopilot-codex
+    status: completed
+    owner_agent: claude-code (2026-07-12)
     files:
       - docs/security/LITELLM_CAPABILITY_MATRIX.md
       - docs/security/LITELLM_INTEGRATION.md
-      - docs/security/LITELLM_DATA_HANDLING.md
-      - docs/security/LITELLM_VERSION_POLICY.md
-      - docs/security/LITELLM_SUPPLY_CHAIN.md
     dependencies: [p0.capture-baseline]
     acceptance_criteria:
       - Every planned gateway feature classified adopt/wrap/build/defer/reject
@@ -142,12 +139,17 @@ tasks:
     tests: []
     notes:
       - >-
-        Hook dispatch RESOLVED by source reading 2026-07-12 — see
-        docs/security/LITELLM_INTEGRATION.md. pre_call routes through
-        UnifiedLLMGuardrails to apply_guardrail and CAN mutate the request;
-        our async_moderation_hook methods are dead code (remove in P4).
-        Remaining here: live-proxy confirmation trace, message-role coverage
-        of _extract_inputs, streaming iterator buffering semantics.
+        Hook dispatch RESOLVED (source + live integration test). Spend-log
+        secure default, UserAPIKeyAuth context shape, Presidio params, and
+        streaming semantics verified — see LITELLM_CAPABILITY_MATRIX.md.
+        Streaming finding - native mode samples every 5th chunk and yields
+        before inspection; buffer_then_release must be built (P12).
+      - >-
+        Deferred per D-010 (not blockers for P1-P5):
+        LITELLM_DATA_HANDLING.md consolidation, LITELLM_VERSION_POLICY.md +
+        LITELLM_SUPPLY_CHAIN.md (P12), custom-auth caveat verification
+        (P11), message-role coverage of litellm _extract_inputs (P2 will pin
+        it with tests anyway).
       - >-
         Verify streaming: ResponseGuardShield uses async_post_call_success_hook
         only; streamed chunks bypass it. Check
@@ -430,4 +432,4 @@ tasks:
 
 blockers: []
 
-next_task: p05.capability-matrix
+next_task: p1.contracts
