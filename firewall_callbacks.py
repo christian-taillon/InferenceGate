@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
@@ -35,15 +36,24 @@ PROMPT_GUARD_MAX_TOKENS = 512
 PROMPT_GUARD_MAX_WORDS = 350
 PROMPT_GUARD_WORD_OVERLAP = 50
 
+DEFAULT_LLAMA_GUARD_MODEL = "openai/llama-guard3:1b"
+
 FAIL_MODE = os.getenv("INFERENCE_GATE_FAIL_MODE", "open").lower()
 BLOCKED_MESSAGE = "Request blocked by content safety shield."
+
+# Security invariant: log records must never contain message or response
+# content, even truncated — exception text may embed request payloads, so
+# only exception types are logged.
+logger = logging.getLogger("inference_gate.shields")
 
 
 def _handle_shield_error(exc: Exception, shield_name: str) -> None:
     """Handle shield execution errors based on configured fail mode."""
     if FAIL_MODE == "closed":
         raise exc
-    print(f"{shield_name} execution error (Failing Open): {exc}")
+    logger.warning(
+        "%s shield error (%s); failing open", shield_name, type(exc).__name__
+    )
 
 
 def _extract_all_content(messages: list[dict[str, Any]]) -> str:
@@ -77,7 +87,11 @@ def _extract_all_content(messages: list[dict[str, Any]]) -> str:
 
 
 def _extract_response_content(response: Any) -> str:
-    """Extract text content from an LLM response object."""
+    """Extract text content from an LLM response object.
+
+    Covers message content, reasoning content, and proposed tool calls —
+    a harmful tool invocation may accompany perfectly benign text.
+    """
     parts: list[str] = []
     choices = getattr(response, "choices", None) or []
     for choice in choices:
@@ -90,6 +104,16 @@ def _extract_response_content(response: Any) -> str:
         reasoning = getattr(message, "reasoning_content", None)
         if reasoning:
             parts.append(reasoning)
+        for tool_call in getattr(message, "tool_calls", None) or []:
+            function = getattr(tool_call, "function", None)
+            if function is None:
+                continue
+            name = getattr(function, "name", None)
+            if name:
+                parts.append(name)
+            arguments = getattr(function, "arguments", None)
+            if arguments:
+                parts.append(arguments)
     return " ".join(parts)
 
 
@@ -125,9 +149,7 @@ class LlamaPromptGuardShield(CustomGuardrail):
             "LLAMA_PROMPT_GUARD_MODEL", "meta-llama/llama-prompt-guard-2-86m"
         )
         super().__init__(**kwargs)
-        print(
-            f"DEBUG: LlamaPromptGuardShield initialized with model: {self.guard_model}"
-        )
+        logger.info("LlamaPromptGuardShield initialized (model=%s)", self.guard_model)
 
     def _build_classify_urls(self, api_base: str) -> list[str]:
         base = api_base.rstrip("/")
@@ -266,12 +288,11 @@ class LlamaPromptGuardShield(CustomGuardrail):
 
             choices = getattr(response, "choices", None) or []
             if not choices:
-                print("DEBUG: Llama Prompt Guard returned no choices.")
+                logger.debug("Llama Prompt Guard returned no choices")
                 continue
 
             message = getattr(choices[0], "message", None)
             raw_content = (getattr(message, "content", "") or "").strip()
-            print(f"DEBUG: Llama Prompt Guard Raw Output: {raw_content}")
             if not raw_content:
                 continue
 
@@ -288,8 +309,9 @@ class LlamaPromptGuardShield(CustomGuardrail):
         )
 
         if not api_base:
-            print(
-                "DEBUG: Llama Prompt Guard error - LLAMA_PROMPT_GUARD_API_BASE or LITELLM_API_BASE not set."
+            logger.warning(
+                "Llama Prompt Guard skipped: LLAMA_PROMPT_GUARD_API_BASE or "
+                "LITELLM_API_BASE not set"
             )
             return []
 
@@ -314,7 +336,7 @@ class LlamaPromptGuardShield(CustomGuardrail):
                 parsed = self._parse_classify_response(json.loads(body))
                 if parsed:
                     return parsed
-                print("DEBUG: Llama Prompt Guard returned no classification data.")
+                logger.debug("Llama Prompt Guard returned no classification data")
                 return []
             except urllib.error.HTTPError as exc:
                 detail = exc.read().decode("utf-8", errors="ignore")
@@ -343,7 +365,7 @@ class LlamaPromptGuardShield(CustomGuardrail):
         if not text_chunks:
             return
 
-        print(f"DEBUG: Llama Prompt Guard checking {len(text_chunks)} chunk(s).")
+        logger.debug("Llama Prompt Guard checking %d chunk(s)", len(text_chunks))
 
         try:
             api_base = os.getenv("LLAMA_PROMPT_GUARD_API_BASE") or os.getenv(
@@ -364,11 +386,15 @@ class LlamaPromptGuardShield(CustomGuardrail):
             if not malicious_results:
                 return
 
-            top_result = max(
-                malicious_results,
-                key=lambda item: float(item.get("malicious_score") or 0.0),
+            top_score = max(
+                float(result.get("malicious_score") or 0.0)
+                for result in malicious_results
             )
-            _ = top_result.get("label") or "MALICIOUS"
+            logger.info(
+                "Llama Prompt Guard blocking request (score=%.3f, chunks_flagged=%d)",
+                top_score,
+                len(malicious_results),
+            )
 
             raise BadRequestError(
                 message=BLOCKED_MESSAGE,
@@ -417,9 +443,9 @@ class LlamaGuardShield(CustomGuardrail):
     """
 
     def __init__(self, **kwargs):
-        self.guard_model = os.getenv("LLAMA_GUARD_MODEL", "openai/llama-guard3:1b")
+        self.guard_model = os.getenv("LLAMA_GUARD_MODEL", DEFAULT_LLAMA_GUARD_MODEL)
         super().__init__(**kwargs)
-        print(f"DEBUG: LlamaGuardShield initialized with model: {self.guard_model}")
+        logger.info("LlamaGuardShield initialized (model=%s)", self.guard_model)
 
     def _resolved_guard_model(self, api_base: str | None) -> str:
         model = self.guard_model
@@ -437,7 +463,7 @@ class LlamaGuardShield(CustomGuardrail):
         if not user_content or not user_content.strip():
             return
 
-        print(f"DEBUG: LlamaGuard checking prompt: {user_content[:50]}...")
+        logger.debug("LlamaGuard checking prompt (%d chars)", len(user_content))
 
         try:
             api_base = os.getenv("LLAMA_GUARD_API_BASE") or os.getenv(
@@ -446,9 +472,7 @@ class LlamaGuardShield(CustomGuardrail):
             api_key = os.getenv("LLAMA_GUARD_API_KEY") or os.getenv("LITELLM_API_KEY")
 
             if not api_base:
-                print(
-                    "DEBUG: LlamaGuard error - LITELLM_API_BASE not set in environment."
-                )
+                logger.warning("LlamaGuard skipped: LITELLM_API_BASE not set")
                 return
 
             response = await litellm.acompletion(
@@ -462,35 +486,32 @@ class LlamaGuardShield(CustomGuardrail):
 
             choices = getattr(response, "choices", None) or []
             if not choices:
-                print("DEBUG: LlamaGuard returned no choices.")
+                logger.debug("LlamaGuard returned no choices")
                 return
 
             message = getattr(choices[0], "message", None)
             raw_content = (getattr(message, "content", "") or "").strip()
             if not raw_content:
-                print("DEBUG: LlamaGuard returned empty content.")
+                logger.debug("LlamaGuard returned empty content")
                 return
-
-            print(f"DEBUG: LlamaGuard Raw Output: {raw_content}")
 
             lines = raw_content.split("\n")
             verdict = lines[0].strip().lower()
 
             if "unsafe" in verdict:
-                categories = []
+                # Log only codes present in the known taxonomy — the guard
+                # model's raw output is untrusted and may echo request text.
+                codes = []
                 if len(lines) > 1:
-                    codes = lines[1].split(",")
-                    for code in codes:
-                        code = code.strip()
-                        category_name = LLAMA_GUARD_TAXONOMY.get(
-                            code, "Policy Violation"
-                        )
-                        categories.append(f"{code}: {category_name}")
-
-                reason_str = (
-                    ", ".join(categories) if categories else "General Safety Violation"
+                    codes = [
+                        code.strip()
+                        for code in lines[1].split(",")
+                        if code.strip() in LLAMA_GUARD_TAXONOMY
+                    ]
+                logger.info(
+                    "LlamaGuard blocking request (categories=%s)",
+                    ",".join(codes) or "unspecified",
                 )
-                print(f"DEBUG: BLOCKING via LlamaGuard. Categories: {reason_str}")
 
                 raise BadRequestError(
                     message=BLOCKED_MESSAGE,
@@ -555,9 +576,7 @@ class PromptGuardLocalShield(CustomGuardrail):
         )
         self.threshold = float(os.getenv("PROMPT_GUARD_LOCAL_THRESHOLD", "0.5"))
         super().__init__(**kwargs)
-        print(
-            f"DEBUG: PromptGuardLocalShield initialized with model: {self.model_id}"
-        )
+        logger.info("PromptGuardLocalShield initialized (model=%s)", self.model_id)
 
     @classmethod
     def _load_pipeline(cls, model_id: str):
@@ -570,7 +589,7 @@ class PromptGuardLocalShield(CustomGuardrail):
                     "Install with: uv sync --extra local-prompt-guard"
                 ) from exc
 
-            print(f"DEBUG: PromptGuardLocal loading model: {model_id}")
+            logger.info("PromptGuardLocal loading model %s", model_id)
             cls._model_cache[model_id] = pipeline(
                 "text-classification",
                 model=model_id,
@@ -628,9 +647,7 @@ class PromptGuardLocalShield(CustomGuardrail):
         if not text_chunks:
             return
 
-        print(
-            f"DEBUG: PromptGuardLocal checking {len(text_chunks)} chunk(s)."
-        )
+        logger.debug("PromptGuardLocal checking %d chunk(s)", len(text_chunks))
 
         try:
             results = await asyncio.to_thread(
@@ -642,6 +659,11 @@ class PromptGuardLocalShield(CustomGuardrail):
             ]
             if not malicious_results:
                 return
+
+            logger.info(
+                "PromptGuardLocal blocking request (chunks_flagged=%d)",
+                len(malicious_results),
+            )
 
             raise BadRequestError(
                 message=BLOCKED_MESSAGE,
@@ -697,8 +719,9 @@ class ResponseGuardShield(CustomGuardrail):
     """
 
     def __init__(self, **kwargs):
+        self.guard_model = os.getenv("LLAMA_GUARD_MODEL", DEFAULT_LLAMA_GUARD_MODEL)
         super().__init__(**kwargs)
-        print("DEBUG: ResponseGuardShield initialized")
+        logger.info("ResponseGuardShield initialized (model=%s)", self.guard_model)
 
     async def _scan_response(self, response_content: str, model_name: str) -> None:
         if not response_content or not response_content.strip():
@@ -708,7 +731,7 @@ class ResponseGuardShield(CustomGuardrail):
     async def _run_llama_guard_response(
         self, response_content: str, model_name: str
     ) -> None:
-        print(f"DEBUG: ResponseGuard scanning output: {response_content[:50]}...")
+        logger.debug("ResponseGuard scanning output (%d chars)", len(response_content))
 
         try:
             api_base = os.getenv("LLAMA_GUARD_API_BASE") or os.getenv(
@@ -717,11 +740,11 @@ class ResponseGuardShield(CustomGuardrail):
             api_key = os.getenv("LLAMA_GUARD_API_KEY") or os.getenv("LITELLM_API_KEY")
 
             if not api_base:
-                print("DEBUG: ResponseGuard error - no API base configured.")
+                logger.warning("ResponseGuard skipped: no API base configured")
                 return
 
             response = await litellm.acompletion(
-                model=LlamaGuardShield().guard_model,
+                model=self.guard_model,
                 messages=[{"role": "user", "content": response_content}],
                 api_base=api_base,
                 api_key=api_key,
@@ -738,11 +761,10 @@ class ResponseGuardShield(CustomGuardrail):
             if not raw_content:
                 return
 
-            print(f"DEBUG: ResponseGuard Raw Output: {raw_content}")
             verdict = raw_content.split("\n")[0].strip().lower()
 
             if "unsafe" in verdict:
-                print(f"DEBUG: BLOCKING via ResponseGuard. Verdict: {verdict}")
+                logger.info("ResponseGuard blocking response")
                 raise BadRequestError(
                     message=BLOCKED_MESSAGE,
                     model=model_name,

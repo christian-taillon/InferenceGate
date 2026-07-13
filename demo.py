@@ -43,6 +43,12 @@ DEBUG_LOG = "proxy_debug.log"
 CONFIG_PATH = "config.yaml"
 RESPONSE_MAX_TOKENS = 80
 
+
+def dev_debug_enabled() -> bool:
+    """Proxy output may contain prompts/responses; capture it to disk only
+    when a developer explicitly opts in."""
+    return os.getenv("INFERENCE_GATE_DEV_DEBUG") == "1"
+
 TEST_PROMPTS = [
     ("SAFE: BASIC MATH", "What is 2+2?"),
     (
@@ -442,40 +448,50 @@ def render_pretty_final(results):
     print()
     print(f"{BOLD}Run Complete{RESET}")
     print("-" * terminal_width())
-    print(f"{DIM}Demo finished. Proxy log written to `{DEBUG_LOG}`.{RESET}")
+    if dev_debug_enabled():
+        print(f"{DIM}Demo finished. Proxy log written to `{DEBUG_LOG}`.{RESET}")
+    else:
+        print(
+            f"{DIM}Demo finished. Set INFERENCE_GATE_DEV_DEBUG=1 to capture "
+            f"a proxy debug log.{RESET}"
+        )
 
 
 def start_proxy():
+    log_dest = f"`{DEBUG_LOG}`" if dev_debug_enabled() else "off"
     print(f"\n{BOLD}Booting InferenceGate gateway...{RESET}")
     print(
-        f"{DIM}Port {PROXY_PORT}  |  Log `{DEBUG_LOG}`  |  Upstream `{DISPLAY_MODEL_NAME}`{RESET}"
+        f"{DIM}Port {PROXY_PORT}  |  Log {log_dest}  |  Upstream `{DISPLAY_MODEL_NAME}`{RESET}"
     )
 
-    with open(DEBUG_LOG, "w", encoding="utf-8") as log_f:
-        proxy_env = normalize_provider_environment(os.environ.copy())
-        if "LITELLM_API_KEY" not in proxy_env:
-            proxy_env["LITELLM_API_KEY"] = "sk-fake"
-        if "LITELLM_API_BASE" not in proxy_env:
-            proxy_env["LITELLM_API_BASE"] = "http://localhost:9999"
+    proxy_env = normalize_provider_environment(os.environ.copy())
+    if "LITELLM_API_KEY" not in proxy_env:
+        proxy_env["LITELLM_API_KEY"] = "sk-fake"
+    if "LITELLM_API_BASE" not in proxy_env:
+        proxy_env["LITELLM_API_BASE"] = "http://localhost:9999"
 
-        # Ensure proxy uses the master key from .env if provided
-        if "LITELLM_MASTER_KEY" not in proxy_env:
-            print(
-                f"{RED}Error: LITELLM_MASTER_KEY is not set. "
-                f"Add a high-entropy key to your .env file.{RESET}"
+    # Ensure proxy uses the master key from .env if provided
+    if "LITELLM_MASTER_KEY" not in proxy_env:
+        print(
+            f"{RED}Error: LITELLM_MASTER_KEY is not set. "
+            f"Add a high-entropy key to your .env file.{RESET}"
+        )
+        return None
+
+    if dev_debug_enabled():
+        with open(DEBUG_LOG, "w", encoding="utf-8") as log_f:
+            proxy = subprocess.Popen(
+                [".venv/bin/litellm", "--config", CONFIG_PATH, "--port", str(PROXY_PORT)],
+                stdout=log_f,
+                stderr=log_f,
+                env=proxy_env,
+                preexec_fn=os.setsid,
             )
-            return None
-
+    else:
         proxy = subprocess.Popen(
-            [
-                ".venv/bin/litellm",
-                "--config",
-                CONFIG_PATH,
-                "--port",
-                str(PROXY_PORT),
-            ],
-            stdout=log_f,
-            stderr=log_f,
+            [".venv/bin/litellm", "--config", CONFIG_PATH, "--port", str(PROXY_PORT)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             env=proxy_env,
             preexec_fn=os.setsid,
         )
