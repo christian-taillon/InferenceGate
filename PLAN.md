@@ -117,7 +117,7 @@ This document outlines the strategic phases for evolving this demonstration into
 
 ---
 
-## Phase 6: Critical Ship-Blockers (Security Hardening)
+## Phase 6: Critical Ship-Blockers (Security Hardening) ✅ (mostly — see notes)
 **Objective:** Fix the critical flaws identified in `GAP_ANALYSIS.md` that block any production deployment. Grouped by code area to minimize context switching.
 
 ### Group A — Shield code (`firewall_callbacks.py` + `config.yaml`)
@@ -140,6 +140,109 @@ These touch the same shield plumbing; do together.
 ### Validation
 - Add tests: response-side block, system/developer message scan, non-text content, fail-open/closed toggle, secret-free error text, mandatory-key abort.
 - Run full `pytest` + `ruff`; add a red-team bypass suite.
+
+### Phase 6 status (verified 2026-07-12, commit `73bc48b` + `f9171fe`)
+- ✅ Response-side scanning (`ResponseGuardShield`, `post_call`) — non-streaming only
+- ✅ Full message-stack scanning (`_extract_all_content`) incl. system/developer/multimodal
+- ✅ Configurable fail-mode (`INFERENCE_GATE_FAIL_MODE`, default open)
+- ✅ Generic client errors (`BLOCKED_MESSAGE`; no shield detail to clients)
+- ✅ Mandatory non-default master key (`serve.py` refuses to start)
+- ✅ Gitleaks in CI (`.github/workflows/test.yml`)
+- ⚠️ Log redaction partial: `--detailed_debug` removed, but shields still `print()` content excerpts and `demo.py` pipes proxy stdout to `proxy_debug.log` → carried into v2 Phase 0 (`p0.scrub-debug-logging`)
+- ❌ TLS/CORS docs → carried into v2 Phase 0 (`p0.tls-cors-docs`)
+- Baseline at close: **78 tests passing** (not 39 — see DECISIONS.md D-001), ruff clean
+
+---
+
+# Transformation Program (v2) — Enterprise Policy-Driven Security Gateway
+
+**Status: ACTIVE.** Target specification: `docs/security/OBJECTIVE.md`.
+Machine-readable task state: `TASKS.yaml` (its `next_task` is authoritative).
+Journal: `WORKLOG.md`. Decisions: `DECISIONS.md`.
+Baseline: `docs/security/reports/legacy-baseline.md`.
+
+Goal: replace the fixed shield pipeline with a configurable control graph —
+detectors produce findings, policy decides meaning, transformers dehydrate
+secrets into scoped placeholders, enforcers act, rehydration happens only at
+authorized execution boundaries. Telltale-compatible rules, multi-tenant
+policy, simulation/approval/audit/rollback. Legacy behavior preserved behind
+a `legacy-default` profile until parity tests pass.
+
+## Phase index and gates
+
+| Phase | Scope | Gate | Status |
+|---|---|---|---|
+| **P0 — Baseline & immediate hardening** | Baseline capture, work-state files, scrub content from shield logs, dependency reconcile (pin litellm ==1.82.0), live-proxy integration test, TLS/CORS docs | Existing behavior reproducible (78 tests); no content in logs | 🔶 in progress — baseline + work-state done |
+| **P0.5 — LiteLLM capability assessment** | Capability matrix at 1.82.0; **empirically trace hook dispatch** (D-004: which hook fires for `mode: pre_call`, which hooks can mutate requests); streaming iterator hook; spend-log content; virtual keys/teams; MCP; supply chain | Every gateway feature classified adopt/wrap/build/defer/reject | ⬜ |
+| **P1 — Control-plane contracts** | Control types, stages, finding/decision/action schemas, policy model, precedence, failure policy, effective-config record | Orchestrator approval + strict review | ⬜ |
+| **P2 — Normalization & trust boundaries** | Canonical records for messages/tools/retrieval/MCP/responses/streams (seeded from `_extract_all_content` / `_extract_response_content`) | Detectors no longer read raw LiteLLM objects | ⬜ |
+| **P3 — Telltale compatibility** | Pin Telltale commit; schema/loader/modifiers/overrides/allowlists; conformance suite; portable regex profile | Shared fixtures equivalent in both products | ⬜ |
+| **P4 — Control adapters & legacy migration** | Wrap the 5 shields as controls; legacy config translator; `legacy-default` profile; **guard-provider registry with capability verification** — all guard models optional (Prompt Guard 2 22M/86M, Llama Guard 3 1B/8B, Granite Guardian 4.1 8B, gpt-oss-safeguard 20B/120B; `docs/security/GUARD_MODELS.md`, D-008) | Parity with current behavior; ≥78 tests pass; gateway runs with zero guard models | ⬜ |
+| **P5 — Decision & action engine** | Aggregation, correlation, action precedence, observe/alert/simulate/confirm/block, `policy explain`, **guard escalation ladder + sequential/parallel execution rules + mode aliasing (D-009)** | Every would-block action simulatable and explainable | ⬜ |
+| **P6 — Secret rules & extraction metadata** | Pin approved sources (Gitleaks/Titus/detect-secrets/Secretlint/Telltale only — licensing rules in AGENTS.md), inventory, importers, dedup, 50–100 pilot rules, FP corpus, notices | Every production rule has provenance + fixtures | ⬜ |
+| **P7 — Detection engine integration** | Compilation, field targeting, spans, overlap resolution, limits/timeouts, rule packs | Deterministic and safe under load | ⬜ |
+| **P8 — Dehydration** | Placeholders, scopes, HMAC fingerprints, AEAD manifests (D-007), storage/TTL/revocation, placeholder-injection defense | Provider receives placeholders, not plaintext | ⬜ |
+| **P9 — Rehydration** | `trusted_tool_only` default, tool/destination/field authorization, JIT restore, result re-dehydration | Model never sees plaintext in normal tool flow | ⬜ |
+| **P10 — Retrieval/MCP/agent security** | RAG/web/MCP scanning, quarantine, correlations (secret+egress, injection+execution) | Indirect injection caught at boundary | ⬜ |
+| **P11 — Multi-tenancy** | Virtual-key context, tenant policy/manifests/keys, budgets, RBAC, versioning, rollback | Cross-tenant negative tests pass | ⬜ |
+| **P12 — Observability/HA/operations** | TLS, health endpoints, Redis/Postgres, metrics/traces/SIEM, circuit breakers, **streaming policy (D-005)**, runbooks | Production deployment documented and tested | ⬜ |
+| **P13 — Final hardening & review** | Review ladder (first-pass → strict → escalation), security/log-leak/simulation/final-validation reports | No undocumented failing tests or gaps | ⬜ |
+
+## Key repo-specific implementation notes
+
+1. **Hook dispatch is unverified (D-004, blocking):** shields implement
+   `async_moderation_hook`/`apply_guardrail` while `config.yaml` says
+   `mode: pre_call`. Moderation hooks historically run parallel to the model
+   call and cannot mutate the request — dehydration *requires* mutation before
+   provider dispatch. P0.5 must trace the real dispatch at litellm 1.82.0
+   before any engine code targets a hook.
+2. **Streaming is unprotected (D-005):** `ResponseGuardShield` only hooks
+   `async_post_call_success_hook`. Do not claim streaming protection; evaluate
+   the streaming iterator hook in P0.5, implement in P12.
+3. **Module-level instantiation:** shield singletons are created at import
+   (`firewall_callbacks.py:534-535, 689, 768`); `ResponseGuardShield` builds a
+   fresh `LlamaGuardShield()` per scan (`:724`). Restructure in P4 via the
+   control registry, not before.
+4. **`FAIL_MODE` read at import time** (`firewall_callbacks.py:38`) — replace
+   with the layered failure policy in P1/P5; keep an env-var adapter for
+   compatibility.
+5. **Remaining log leaks:** `firewall_callbacks.py:274,440,474,711,741`
+   print content excerpts; `demo.py:454` pipes proxy stdout to
+   `proxy_debug.log`. Fix in `p0.scrub-debug-logging`.
+6. **Dependency truth is `uv.lock`** (litellm 1.82.0); `requirements.txt` is a
+   stale Mar-2026 export (D-002). Fix in `p0.dependency-reconcile`.
+7. **System-first sequencing (D-010, user directive 2026-07-12):** get the
+   core pipeline running before enterprise tooling. Deferred until the engine
+   works: OIDC control-plane auth (SAML only ever via an identity broker),
+   central administration (API-first when it comes), budget/RBAC UI. The
+   merged difficulty research agrees with our phase order: Presidio and
+   logging are easy (adopt: D-011, native litellm guardrail verified at
+   1.82.0); the genuinely hard problems are streaming enforcement (P12),
+   tool/agent interception (P10 — legacy extractor now scans `tool_calls`),
+   session-level risk (P10 correlator), tenant isolation (P11), and central
+   admin (deferred).
+8. **Guard models are optional pluggable backends (D-008):** the gateway must
+   run deterministic-only with zero guard models; customer-supplied endpoints
+   register through a capability-verified provider registry (14-fixture
+   battery; undemonstrated features disabled). Roster, orchestration,
+   escalation ladder, strict per-backend output parsers, and streaming modes:
+   `docs/security/GUARD_MODELS.md`. Existing shields map to Prompt Guard /
+   Llama Guard backends; Granite Guardian 4.1 and gpt-oss-safeguard reviewers
+   are net-new.
+
+## Current phase and next action
+
+- **Current phase:** **P0 COMPLETE** (2026-07-12) → now **P0.5**.
+  Test floor: **84 unit + 4 integration** (`pytest -m integration`, live
+  proxy vs stub upstream, credential-free, runs in CI). Python pinned 3.13
+  (`.python-version` — 3.14 venv could not boot the proxy: uvloop broken).
+- **D-004 resolved and live-confirmed:** pre_call `apply_guardrail` can
+  mutate requests (dehydration placement viable); guard blocks prevent the
+  provider call entirely. See `docs/security/LITELLM_INTEGRATION.md`.
+- **CORS finding:** litellm 1.82.0 hardcodes `origins=["*"]` — no config
+  knob; enforce at ingress (`docs/security/OPERATIONS.md`).
+- **Next action:** `p05.capability-matrix` (see TASKS.yaml)
+- **Blockers:** none
 
 ---
 

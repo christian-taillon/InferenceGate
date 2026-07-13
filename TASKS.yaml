@@ -1,0 +1,433 @@
+version: 1
+updated_at: 2026-07-12
+
+# Machine-readable task state for the InferenceGate v2 transformation.
+# Allowed states: pending ready in_progress blocked review completed rejected deferred
+# Phase definitions and gates: PLAN.md § "Transformation Program (v2)".
+# Target spec: docs/security/OBJECTIVE.md
+
+current_phase: p05-litellm-assessment
+overall_status: in_progress
+
+tasks:
+  # ── Phase 0: baseline + immediate hardening ────────────────────────────
+  - id: p0.capture-baseline
+    title: Capture and record current behavior baseline
+    phase: p0-baseline
+    status: completed
+    owner_agent: claude-code (workspace prep)
+    files: [docs/security/reports/legacy-baseline.md]
+    dependencies: []
+    acceptance_criteria:
+      - Test count, ruff status, litellm version, shield order recorded
+      - Discrepancies vs prior docs noted (78 tests, not 39)
+    tests: ["uv run pytest tests/ -q  # 78 passed"]
+    notes:
+      - Completed 2026-07-12 during workspace preparation.
+
+  - id: p0.workstate-files
+    title: Create canonical work-state files (AGENTS.md, TASKS.yaml, WORKLOG.md, DECISIONS.md)
+    phase: p0-baseline
+    status: completed
+    owner_agent: claude-code (workspace prep)
+    files: [AGENTS.md, TASKS.yaml, WORKLOG.md, DECISIONS.md, docs/security/OBJECTIVE.md]
+    dependencies: []
+    acceptance_criteria:
+      - Another agent can resume from repo files alone
+    tests: []
+    notes: []
+
+  - id: p0.scrub-debug-logging
+    title: Remove prompt/response content from shield debug output
+    phase: p0-baseline
+    status: completed
+    owner_agent: claude-code (2026-07-12)
+    files: [firewall_callbacks.py, demo.py]
+    dependencies: []
+    acceptance_criteria:
+      - >-
+        No print()/log of message or response content, even truncated.
+        Offenders: firewall_callbacks.py lines ~274 (Prompt Guard raw output),
+        ~440 (prompt excerpt), ~474 (LlamaGuard raw output), ~711 (response
+        excerpt), ~741 (ResponseGuard raw output).
+      - >-
+        Replace print() with stdlib logging; content-free structured fields
+        only (shield name, verdict, chunk count, latency).
+      - >-
+        demo.py proxy_debug.log capture gated behind an explicit
+        INFERENCE_GATE_DEV_DEBUG=1 env flag; default writes no content log.
+      - >-
+        New test asserts a canned secret string in a blocked prompt never
+        appears in captured stdout/log output (log-leak test).
+    tests: ["uv run pytest tests/ -q", "new: tests/test_log_leaks.py"]
+    notes:
+      - "--detailed_debug was already removed; remaining leak paths are the
+         shield print() calls and the raw stdout pipe in demo.py:454."
+
+  - id: p0.dependency-reconcile
+    title: Reconcile requirements.txt vs uv.lock vs pyproject
+    phase: p0-baseline
+    status: completed
+    owner_agent: claude-code (2026-07-12)
+    files: [requirements.txt, pyproject.toml, README.md, DOCKER_DEPLOYMENT.md]
+    dependencies: []
+    acceptance_criteria:
+      - Single dependency source of truth (uv.lock); requirements.txt either
+        deleted or regenerated via 'uv export' with a header saying it is generated
+      - litellm pinned exactly (==1.82.0) in pyproject, not >=
+      - Docs reference the uv workflow only
+    tests: ["uv sync --extra dev && uv run pytest tests/ -q"]
+    notes:
+      - requirements.txt is a 165KB hash-pinned export from 2026-03-07; drifted.
+
+  - id: p0.live-proxy-integration-test
+    title: Add live LiteLLM proxy integration test (opt-in marker)
+    phase: p0-baseline
+    status: completed
+    owner_agent: claude-code (2026-07-12)
+    files: [tests/test_integration_proxy.py, .github/workflows/test.yml, .python-version]
+    dependencies: [p0.scrub-debug-logging]
+    acceptance_criteria:
+      - Spins the proxy with a mock upstream, asserts a malicious prompt is
+        blocked end-to-end with the generic message and a safe prompt passes
+      - Marked @pytest.mark.integration; excluded from default run via
+        pyproject addopts; runs in CI against the stub (no creds needed)
+    tests: ["uv run pytest -m integration  # 4 passed"]
+    notes:
+      - >-
+        Doubles as the live D-004 confirmation - guards run pre-provider,
+        blocked requests never reach the upstream stub, ResponseGuard scans
+        after the provider call, block errors are generic (no S-codes).
+      - >-
+        Found and fixed an environment defect - the venv was Python 3.14
+        where uvloop cannot import (BaseDefaultEventLoopPolicy removed), so
+        the proxy could not start at all. Pinned Python 3.13 via
+        .python-version; CI passes --python to uv sync so the 3.12 matrix
+        leg still tests 3.12.
+
+  - id: p0.tls-cors-docs
+    title: Document TLS ingress requirement and default-deny CORS
+    phase: p0-baseline
+    status: completed
+    owner_agent: claude-code (2026-07-12)
+    files: [docs/security/OPERATIONS.md]
+    dependencies: []
+    acceptance_criteria:
+      - TLS termination requirement documented with a working reverse-proxy example
+      - CORS policy documented; LiteLLM config verified for origin settings
+    tests: []
+    notes:
+      - >-
+        Verified limitation - litellm 1.82.0 hardcodes origins=["*"] with
+        allow_credentials=True (proxy_server.py:1076); no config knob exists.
+        CORS must be enforced at the fronting ingress until P11/P12. Native
+        TLS flags (--ssl_certfile_path/--ssl_keyfile_path) confirmed present.
+
+  # ── Phase 0.5: LiteLLM capability assessment ───────────────────────────
+  - id: p05.capability-matrix
+    title: Build LiteLLM 1.82.0 capability matrix (adopt/wrap/build/defer/reject)
+    phase: p05-litellm-assessment
+    status: pending
+    owner_agent: search-ollama + autopilot-codex
+    files:
+      - docs/security/LITELLM_CAPABILITY_MATRIX.md
+      - docs/security/LITELLM_INTEGRATION.md
+      - docs/security/LITELLM_DATA_HANDLING.md
+      - docs/security/LITELLM_VERSION_POLICY.md
+      - docs/security/LITELLM_SUPPLY_CHAIN.md
+    dependencies: [p0.capture-baseline]
+    acceptance_criteria:
+      - Every planned gateway feature classified adopt/wrap/build/defer/reject
+      - Verified against installed litellm 1.82.0, not docs from memory
+    tests: []
+    notes:
+      - >-
+        Hook dispatch RESOLVED by source reading 2026-07-12 — see
+        docs/security/LITELLM_INTEGRATION.md. pre_call routes through
+        UnifiedLLMGuardrails to apply_guardrail and CAN mutate the request;
+        our async_moderation_hook methods are dead code (remove in P4).
+        Remaining here: live-proxy confirmation trace, message-role coverage
+        of _extract_inputs, streaming iterator buffering semantics.
+      - >-
+        Verify streaming: ResponseGuardShield uses async_post_call_success_hook
+        only; streamed chunks bypass it. Check
+        async_post_call_streaming_iterator_hook availability at 1.82.0.
+      - Verify what reaches spend logs / StandardLoggingPayload at 1.82.0.
+
+  # ── Later phases (stubs — expand when the phase opens) ────────────────
+  - id: p1.contracts
+    title: Control-plane contracts (control types, stages, finding/decision/action schemas)
+    phase: p1-contracts
+    status: pending
+    owner_agent: autopilot-codex
+    files: [docs/security/]
+    dependencies: [p05.capability-matrix]
+    acceptance_criteria: [Strict architecture review passes]
+    tests: []
+    notes:
+      - >-
+        Fold the merged-research assessment-event fields into the audit
+        contract - event_id, trace_id, session_id, tenant/application/
+        subject/virtual_key ids, model_requested vs model_used, policy_id +
+        immutable policy_version, stage, detector + detector_version,
+        findings, action_taken, fail_mode, latency, content_hash,
+        redacted_evidence. Raw content only with explicit tenant opt-in;
+        default is hashes + classifications + redacted evidence. Record
+        failed AND bypassed filters. Async event pipeline (Postgres first,
+        SIEM/webhook/object-storage exports later) so auditing never adds
+        inference latency.
+      - >-
+        Verdict shape from research maps onto finding/decision split -
+        assess(content, context, policy) -> {action, findings[],
+        transformed_content, engine_version, latency_ms}.
+
+  - id: p2.normalization
+    title: Canonical records + trust boundaries (detectors stop reading raw LiteLLM objects)
+    phase: p2-normalization
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/normalization/]
+    dependencies: [p1.contracts]
+    acceptance_criteria: []
+    tests: []
+    notes:
+      - _extract_all_content and _extract_response_content are the seeds.
+      - >-
+        tool_calls coverage gap from merged research was fixed in the legacy
+        extractor 2026-07-12 (function names + arguments now scanned);
+        canonical records must keep tool_call as a first-class field, not
+        flattened text.
+
+  - id: p3.telltale
+    title: Telltale-compatible rule engine + conformance suite
+    phase: p3-telltale
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/detection/telltale/]
+    dependencies: [p1.contracts]
+    acceptance_criteria: [Shared fixtures equivalent in both products]
+    tests: []
+    notes: [Pin exact Telltale commit before writing the loader.]
+
+  - id: p4.legacy-migration
+    title: Convert five shields into control adapters; legacy-default parity profile
+    phase: p4-legacy-migration
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/, firewall_callbacks.py]
+    dependencies: [p2.normalization]
+    acceptance_criteria: [legacy-default matches current behavior; all 78 baseline tests still pass]
+    tests: []
+    notes:
+      - >-
+        Backend abstraction must follow docs/security/GUARD_MODELS.md: remote
+        and local Prompt Guard become two strategies of one logical
+        classifier; LlamaGuardShield parsing tightened to strict
+        accept/reject (exactly 'safe' or 'unsafe' + S-codes; no silent
+        repair, per D-008).
+
+  - id: p4.guard-registry
+    title: Guard-provider registry with capability verification (all guard models optional)
+    phase: p4-legacy-migration
+    status: pending
+    owner_agent: coder-codex
+    files:
+      - inference_gate/classifiers/
+      - inference_gate/reviewers/
+      - config/security/guard-providers.d/
+      - docs/security/GUARD_MODELS.md
+    dependencies: [p1.contracts]
+    acceptance_criteria:
+      - >-
+        Gateway runs with zero guard models configured
+        (deterministic-only); any subset of Prompt Guard 2 (22M/86M),
+        Llama Guard 3 (1B/8B), Granite Guardian 4.1 8B, gpt-oss-safeguard
+        (20B/120B) is registrable per tenant/route/profile.
+      - >-
+        Registration runs the 14-fixture capability battery from
+        GUARD_MODELS.md; undemonstrated features are disabled per provider;
+        results stored and re-run on version/runtime/template change.
+      - >-
+        Strict per-backend parsers with reject-on-malformed: Llama Guard
+        safe/unsafe+S-codes; Granite single <score>yes|no</score> with
+        declared criterion polarity, <think> handled separately; gpt-oss
+        strict JSON allow/violation/review with rule_ids.
+      - >-
+        Normalized guard result DTO emitted for every invocation (matched,
+        model_decision, gateway_action, stage, policy/rule ids, score-or-null,
+        model, provider, latency_ms); scores never fabricated.
+    tests:
+      - "fixture battery: 14 cases per registered provider"
+      - "malformed-output, timeout, refusal → failure-policy events"
+    notes:
+      - Granite Guardian and gpt-oss-safeguard backends are net-new (no
+        legacy code); Prompt Guard / Llama Guard wrap existing shields.
+      - LiteLLM model_list/router may serve as transport to guard endpoints
+        (evaluate in p05.capability-matrix) — registry owns semantics.
+
+  - id: p4.presidio-backend
+    title: Presidio as optional PII detector/transformer backend (D-011)
+    phase: p4-legacy-migration
+    status: pending
+    owner_agent: coder-ollama
+    files: [config.yaml, docs/security/GUARD_MODELS.md]
+    dependencies: [p4.guard-registry]
+    acceptance_criteria:
+      - Uses litellm's native presidio guardrail (verified present at 1.82.0,
+        proxy/guardrails/guardrail_hooks/presidio.py); disabled by default
+      - Entity-level action mapping (block/mask/report/allow per entity, per
+        stage) decided by InferenceGate policy, not Presidio config
+      - Presidio masking is irreversible here; reversible tokenization stays
+        InferenceGate dehydration (P8) — no second rehydration path
+      - Finding-overlap resolution prevents double-masking with other engines
+    tests: [integration test against a stub or containerized Presidio]
+    notes: []
+
+  - id: p5.decision-engine
+    title: Decision/action engine (modes, precedence, simulation, explanation)
+    phase: p5-decision-engine
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/policy/, inference_gate/actions/]
+    dependencies: [p1.contracts]
+    acceptance_criteria: []
+    tests: []
+    notes:
+      - >-
+        Include the guard escalation ladder (deterministic → Prompt Guard →
+        Llama Guard/Granite → gpt-oss 20B → human review/120B offline) and
+        sequential-vs-parallel execution rules from GUARD_MODELS.md;
+        early-stop on deterministic critical violations.
+      - >-
+        Mode aliasing per D-009 - loader accepts test/shadow/review/enforce
+        and normalizes to canonical modes.
+      - >-
+        Trust-aware actions - direct user injection may block; injection in
+        retrieved/tool content quarantines the segment/source, never
+        auto-blocks the whole user request.
+
+  - id: p6.secret-rules
+    title: Licensed secret ruleset (pin sources, import, dedupe, 50-100 pilot rules)
+    phase: p6-secret-rules
+    status: pending
+    owner_agent: coder-ollama + review-ollama-strict
+    files: [config/security/, docs/security/reports/]
+    dependencies: [p3.telltale]
+    acceptance_criteria: [Every production rule has provenance and fixtures]
+    tests: []
+    notes: [Approved sources only — see AGENTS.md licensing rules.]
+
+  - id: p7.detection-engine
+    title: Detection engine integration (compilation, targeting, spans, limits)
+    phase: p7-detection-engine
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/detection/]
+    dependencies: [p3.telltale, p6.secret-rules]
+    acceptance_criteria: []
+    tests: []
+    notes: []
+
+  - id: p8.dehydration
+    title: Dehydration (placeholders, HMAC fingerprints, AEAD manifests, scopes)
+    phase: p8-dehydration
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/dehydration/]
+    dependencies: [p7.detection-engine]
+    acceptance_criteria: [Provider receives placeholders, not protected plaintext]
+    tests: []
+    notes: [Use the 'cryptography' package AEAD (AESGCM/ChaCha20Poly1305); no custom crypto.]
+
+  - id: p9.rehydration
+    title: Rehydration at authorized execution boundaries (trusted_tool_only default)
+    phase: p9-rehydration
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/rehydration/]
+    dependencies: [p8.dehydration]
+    acceptance_criteria: [Model never receives plaintext in the normal tool flow]
+    tests: []
+    notes: []
+
+  - id: p10.agent-security
+    title: Retrieval/MCP/agent-chain controls + correlations
+    phase: p10-agent-security
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/]
+    dependencies: [p9.rehydration]
+    acceptance_criteria: []
+    tests: []
+    notes:
+      - >-
+        Wire optional Granite RAG criteria (context_relevance, groundedness,
+        answer_relevance) as quality signals mapped to
+        review/regenerate/re-retrieve/warn — not security violations; and the
+        optional Granite tool-call conversation-support check (additive
+        context, never authorization). See GUARD_MODELS.md.
+      - >-
+        Session-level risk state (merged research): stable session ID,
+        cumulative findings, prior decisions, model changes, tool-invocation
+        chain, risk escalation over time — individually benign turns can be
+        malicious in combination. Emit both request verdict and session risk
+        state. Store normalized findings + content hashes, NOT full
+        conversation content (optional encrypted retention only).
+
+  - id: p11.multi-tenant
+    title: Multi-tenant enterprise controls (virtual keys, tenant manifests, RBAC)
+    phase: p11-multi-tenant
+    status: pending
+    owner_agent: coder-codex
+    files: [inference_gate/]
+    dependencies: [p8.dehydration]
+    acceptance_criteria: [Cross-tenant negative tests pass]
+    tests: []
+    notes:
+      - "DEFERRED emphasis per D-010: core pipeline first."
+      - >-
+        Authoritative hierarchy is InferenceGate-owned, not LiteLLM-owned -
+        Tenant -> Applications -> Environments -> Identities/Service
+        Accounts -> LiteLLM virtual keys; Tenant -> Policy Bundles ->
+        Assessment Rules. Every request gets a trusted internal context
+        (tenant, application, environment, subject, roles, policy_bundle,
+        session, trace) resolved BEFORE any control executes; never trust
+        tenant/policy/bypass info in the request body; missing tenant
+        context fails closed.
+      - >-
+        Auth: OIDC for the control plane (validate issuer/signature/
+        audience, map claims to tenant+roles); never self-implement SAML -
+        an identity broker (Keycloak/Authentik/Okta) presents OIDC to us.
+        LiteLLM custom-auth hooks have budget/model-access caveats - verify
+        in p05. Identity classes: admins (OIDC), developers (OIDC or virtual
+        keys), applications (service accounts/workload identity), CI/CD
+        (short-lived credentials).
+      - >-
+        Central administration is API-first - versioned API + declarative
+        YAML; UI later as a client of the same API (D-010).
+
+  - id: p12.operations
+    title: Observability, HA, streaming policy, runbooks
+    phase: p12-operations
+    status: pending
+    owner_agent: autopilot-codex
+    files: [docs/security/OPERATIONS.md]
+    dependencies: [p11.multi-tenant]
+    acceptance_criteria: []
+    tests: []
+    notes: []
+
+  - id: p13.final-review
+    title: Final hardening + strict review + escalation of unresolved risks
+    phase: p13-final-review
+    status: pending
+    owner_agent: review-ollama-strict + escalation
+    files: [docs/security/reports/]
+    dependencies: [p12.operations]
+    acceptance_criteria: [No undocumented failing tests or security gaps]
+    tests: []
+    notes: []
+
+blockers: []
+
+next_task: p05.capability-matrix
