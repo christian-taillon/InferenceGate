@@ -2,6 +2,24 @@
 
 Assessment of the current LiteLLM-proxy-based firewall against production security and reliability bars. Findings are line-backed against the current codebase.
 
+> **Status update 2026-07-12 (verified against HEAD `784bb21`):** The original
+> analysis below predates the Phase 6 hardening commits (`73bc48b`, `f9171fe`).
+> Items marked **[FIXED — Phase 6]** inline have been re-verified as resolved.
+> Remaining and newly discovered gaps are tracked in `TASKS.yaml` /
+> `PLAN.md § Transformation Program (v2)`; the enterprise target state is
+> `docs/security/OBJECTIVE.md`. Verified baseline: **78 tests passing**, ruff
+> clean, litellm pinned 1.82.0 (`docs/security/reports/legacy-baseline.md`).
+>
+> Newly discovered gaps (2026-07-12):
+> - **Hook-dispatch ambiguity** — custom shields implement
+>   `async_moderation_hook`/`apply_guardrail` while config declares
+>   `mode: pre_call`; actual dispatch at litellm 1.82.0 unverified (DECISIONS.md D-004).
+> - **Streaming bypass** — `ResponseGuardShield` only covers non-streaming
+>   responses; streamed chunks are unscanned (D-005).
+> - **Residual content logging** — shield `print()` calls emit prompt/response
+>   excerpts (`firewall_callbacks.py:274,440,474,711,741`); `demo.py:454`
+>   pipes proxy stdout to `proxy_debug.log` (task `p0.scrub-debug-logging`).
+
 Legend: ✅ Mature · ⚠️ Partial / At-risk · ❌ Missing
 
 ---
@@ -11,27 +29,27 @@ Legend: ✅ Mature · ⚠️ Partial / At-risk · ❌ Missing
 | Requirement | Status | Gap / Recommendation |
 | :--- | :--- | :--- |
 | **PII / Secrets / Attack regex** | ✅ Mature | Regex + LlamaGuard cover major PII and attack patterns (`config.yaml:16-46`). |
-| **Response-side filtering** | ❌ Missing | All guardrails are `mode: pre_call` (`config.yaml:20,55,68`). Model output passes through unscanned. **Risk:** data exfiltration via model output, toxic content, leaked secrets echoed back. **Fix:** add `during_call`/`post_call` guardrails and scan completions. |
-| **Message-scope coverage** | ❌ Missing | `_extract_latest_user_content` only inspects the latest `user` text message (`firewall_callbacks.py:39-53`). **Bypass vectors:** (a) injection via `system`/`developer` messages, (b) multimodal non-text content (images/audio), (c) prior turns in history. **Fix:** scan full message stack incl. system/developer and non-text parts. |
+| **Response-side filtering** | ✅ **[FIXED — Phase 6]** (non-streaming only; streamed chunks still bypass — see status update) | All guardrails are `mode: pre_call` (`config.yaml:20,55,68`). Model output passes through unscanned. **Risk:** data exfiltration via model output, toxic content, leaked secrets echoed back. **Fix:** add `during_call`/`post_call` guardrails and scan completions. |
+| **Message-scope coverage** | ✅ **[FIXED — Phase 6]** (`_extract_all_content` scans full stack incl. system/developer/multimodal) | `_extract_latest_user_content` only inspects the latest `user` text message (`firewall_callbacks.py:39-53`). **Bypass vectors:** (a) injection via `system`/`developer` messages, (b) multimodal non-text content (images/audio), (c) prior turns in history. **Fix:** scan full message stack incl. system/developer and non-text parts. |
 | **Encrypted / encoded PII** | ⚠️ Partial | Base64/hex PII only caught probabilistically by LlamaGuard. **Fix:** deterministic decode-and-scan middleware (base64, hex, URL-encoding, unicode escapes). |
-| **Shield fail-mode** | ⚠️ At-risk | Shields fail **open** on any unexpected exception (`firewall_callbacks.py:349-352, 471-474`) with no metric, alert, or config toggle. **Fix:** make fail-open/closed configurable per guardrail and emit a counter on failure. |
+| **Shield fail-mode** | ⚠️ **[Partially fixed — Phase 6]** (`INFERENCE_GATE_FAIL_MODE` toggle exists; still global, import-time, no failure metric) | Shields fail **open** on any unexpected exception (`firewall_callbacks.py:349-352, 471-474`) with no metric, alert, or config toggle. **Fix:** make fail-open/closed configurable per guardrail and emit a counter on failure. |
 
 ## 2. Secrets & Configuration Hygiene
 
 | Requirement | Status | Gap / Recommendation |
 | :--- | :--- | :--- |
-| **Secret-scanning in CI** | ❌ Missing | No gitleaks/trufflehog step in `.github/workflows/test.yml:1-36`. `.gitignore:5` blocks `*.env` (verified — no real keys tracked, `.env.example` holds placeholders only). **Fix:** add a secret-scanning CI step as a guardrail to prevent future leaks. |
-| **Default master key** | ❌ Violation | `LITELLM_MASTER_KEY` defaults to the literal `sk-inference-gate-v1` (`serve.py:62-68`, `demo.py:445-453`, `.env.example:20`). Any deployment that forgets the env var ships with a known key. **Fix:** refuse to start without an explicit, high-entropy key. |
-| **Key logged at startup** | ❌ Violation | `serve.py:64-85` prints the master key and startup errors to stdout. **Fix:** redact secrets from logs; never log credentials. |
+| **Secret-scanning in CI** | ✅ **[FIXED — Phase 6]** (gitleaks-action@v2 in workflow) | No gitleaks/trufflehog step in `.github/workflows/test.yml:1-36`. `.gitignore:5` blocks `*.env` (verified — no real keys tracked, `.env.example` holds placeholders only). **Fix:** add a secret-scanning CI step as a guardrail to prevent future leaks. |
+| **Default master key** | ✅ **[FIXED — Phase 6]** (`serve.py:70-78` refuses unset/default key) | `LITELLM_MASTER_KEY` defaults to the literal `sk-inference-gate-v1` (`serve.py:62-68`, `demo.py:445-453`, `.env.example:20`). Any deployment that forgets the env var ships with a known key. **Fix:** refuse to start without an explicit, high-entropy key. |
+| **Key logged at startup** | ✅ **[FIXED — Phase 6]** (masked as `************`) | `serve.py:64-85` prints the master key and startup errors to stdout. **Fix:** redact secrets from logs; never log credentials. |
 | **Per-tenant keys / rotation** | ❌ Missing | Single shared master key for all clients (`serve.py:62-74`). No virtual keys, no rotation, no revocation. **Fix:** LiteLLM virtual keys + Postgres, or integrate Vault/OIDC. |
-| **Verbose debug logging** | ⚠️ At-risk | Demo runs `litellm --detailed_debug` and pipes stdout/stderr to `proxy_debug.log` (`demo.py:444-466`). Full prompts/responses likely captured to disk. **Fix:** gate debug mode behind an explicit flag and scrub PII from debug logs. |
+| **Verbose debug logging** | ⚠️ **[Partially fixed]** (`--detailed_debug` removed; shield print() excerpts and proxy_debug.log pipe remain — task p0.scrub-debug-logging) | Demo runs `litellm --detailed_debug` and pipes stdout/stderr to `proxy_debug.log` (`demo.py:444-466`). Full prompts/responses likely captured to disk. **Fix:** gate debug mode behind an explicit flag and scrub PII from debug logs. |
 
 ## 3. Transport & Network
 
 | Requirement | Status | Gap / Recommendation |
 | :--- | :--- | :--- |
-| **TLS termination** | ❌ Missing | Proxy listens plain HTTP on `:8001` (`serve.py:55,77-80`). No TLS in app or config. **Fix:** terminate TLS at proxy or a fronting ingress; reject plaintext. |
-| **CORS / origin policy** | ❌ Missing | No CORS configuration found in code or config. **Fix:** explicit allow-list of origins; deny by default. |
+| **TLS termination** | ⚠️ **[Documented 2026-07-12]** (`docs/security/OPERATIONS.md`: ingress termination required; native `--ssl_certfile_path` flags verified; enforcement/runbooks in P12) | Proxy listens plain HTTP on `:8001` (`serve.py:55,77-80`). No TLS in app or config. **Fix:** terminate TLS at proxy or a fronting ingress; reject plaintext. |
+| **CORS / origin policy** | ❌ **[Verified worse than assumed]** litellm 1.82.0 hardcodes `origins=["*"]` + `allow_credentials=True` (`proxy_server.py:1076`) with no config knob — must be enforced at ingress (`docs/security/OPERATIONS.md`) | No CORS configuration found in code or config. **Fix:** explicit allow-list of origins; deny by default. |
 | **Health/readiness exposure** | ⚠️ Partial | `/health/readiness` used in docs (`DOCKER_DEPLOYMENT.md:68-74`); no liveness/readiness split or auth on health endpoints. **Fix:** unauthenticated `/healthz` (liveness) vs. authenticated `/readyz` (readiness). |
 | **High availability** | ❌ Missing | Single process, single point of failure. **Fix:** K8s Deployment + LB, stateless replicas, external Redis/Postgres. |
 
@@ -39,7 +57,7 @@ Legend: ✅ Mature · ⚠️ Partial / At-risk · ❌ Missing
 
 | Requirement | Status | Gap / Recommendation |
 | :--- | :--- | :--- |
-| **Error detail to client** | ⚠️ At-risk | Blocked requests raise `BadRequestError` with shield labels/categories (`firewall_callbacks.py:341-348, 466-470`), parsed into user-facing phase/reason in `demo.py:235-294`. **Risk:** tells attackers which shield tripped and why, enabling evasion tuning. **Fix:** return generic `request rejected` to client; keep detail in server logs only. |
+| **Error detail to client** | ✅ **[FIXED — Phase 6]** (generic `BLOCKED_MESSAGE`; detail server-side only) | Blocked requests raise `BadRequestError` with shield labels/categories (`firewall_callbacks.py:341-348, 466-470`), parsed into user-facing phase/reason in `demo.py:235-294`. **Risk:** tells attackers which shield tripped and why, enabling evasion tuning. **Fix:** return generic `request rejected` to client; keep detail in server logs only. |
 | **Stack-trace leakage** | ⚠️ Unknown | No global exception handler seen; default LiteLLM behavior may surface tracebacks. **Fix:** explicit `except Exception` handler returning generic 5xx. |
 | **Upstream failure mode** | ⚠️ Partial | No explicit handling for upstream LLM downtime/timeout. **Fix:** circuit breaker, timeout budget, fallback model, and fail-closed option for high-sensitivity tenants. |
 
@@ -72,9 +90,9 @@ Legend: ✅ Mature · ⚠️ Partial / At-risk · ❌ Missing
 | Requirement | Status | Gap / Recommendation |
 | :--- | :--- | :--- |
 | **Unit tests for shields** | ✅ Functional | Regex, taxonomy, parsing covered (`tests/test_firewall.py:84-406`). |
-| **Integration through proxy** | ❌ Missing | No end-to-end test that a malicious prompt through the running proxy is actually blocked. **Fix:** integration test spinning the proxy and asserting block behavior. |
+| **Integration through proxy** | ✅ **[FIXED 2026-07-12]** (`tests/test_integration_proxy.py`: live proxy + stub upstream; block/pass/ordering/output-scan asserted; runs in CI) | No end-to-end test that a malicious prompt through the running proxy is actually blocked. **Fix:** integration test spinning the proxy and asserting block behavior. |
 | **Bypass tests** | ❌ Missing | No tests asserting system/developer messages, multimodal content, and response-side output are (or are not) scanned. **Fix:** explicit tests pinning the intended scope. |
-| **Secret-leak tests** | ❌ Missing | No test asserting secrets are absent from logs/errors. **Fix:** add assertions that fail-open path does not echo payloads. |
+| **Secret-leak tests** | ✅ **[FIXED 2026-07-12]** (`tests/test_log_leaks.py`: canary assertions on fail-open, block paths, taxonomy filtering) | No test asserting secrets are absent from logs/errors. **Fix:** add assertions that fail-open path does not echo payloads. |
 | **Secret scanning in CI** | ❌ Missing | `.github/workflows/test.yml:1-36` runs pytest+ruff only. **Fix:** add gitleaks/trufflehog step. |
 
 ## 9. Supply Chain
