@@ -272,3 +272,35 @@ Never rewrite or delete prior entries. Newest entry last.
   assessment-event fields (p1 task notes) and the UserAPIKeyAuth→tenant
   context mapping (capability matrix consequence #1). Gate: strict
   architecture review before any engine code.
+
+---
+
+## 2026-07-12 (later) — P1 contracts implemented as code
+
+- **Agent:** Claude Code (claude-fable-5), interactive session
+- **Task IDs:** p1.contracts (status: review)
+- **Approach decision:** contracts are CODE, not eight prose docs —
+  `inference_gate/contracts.py` (stdlib-only: enums + frozen dataclasses)
+  is normative; `docs/security/CONTROL_MODEL.md` anchors it and records
+  what deliberately arrives later (policy resolver P5, effective-config P5,
+  assessment-event envelope with the audit sink, manifests P8, session risk
+  P10). Rationale: testable, drift-proof, directly advances a running
+  system (minimal-code directive).
+- **Files:** `inference_gate/__init__.py`, `inference_gate/contracts.py`,
+  `tests/test_contracts.py` (16 tests), `docs/security/CONTROL_MODEL.md`;
+  TASKS/PLAN/AGENTS updated.
+- **Contract decisions encoded:** Mode.parse accepts shadow/review aliases,
+  rejects test/enforce (D-009); Action.resolve implements the default
+  precedence (deny strongest); FAILURE_DEFAULTS per control type with DENY
+  floor for transformers/enforcers; TenantContext.from_user_api_key_auth
+  fails closed without team_id and uses litellm's hashed api_key as the
+  non-secret virtual_key_id; Decision always records recommended AND
+  executed action with .simulated derived; Finding carries spans/paths for
+  dehydration targeting, no plaintext by contract.
+- **Tests:** **100 unit passed** (84 + 16), ruff clean.
+- **Exact next action:** `p2.normalization` — canonical message/tool-call/
+  response/chunk records consuming TenantContext + Stage; tool_calls stay
+  first-class fields (not flattened text); detectors stop reading raw
+  LiteLLM objects. P1 strict review can run in parallel (OpenCode
+  review-ollama-strict) — precedence/mode/fail-closed changes need a
+  DECISIONS entry.
