@@ -4,9 +4,12 @@ version = "0.1.0"
 description = "A production-ready Enterprise LLM Firewall Gateway using LiteLLM"
 readme = "README.md"
 requires-python = ">=3.10"
+# litellm is pinned exactly: the gateway's security behavior depends on hook
+# dispatch semantics verified per-version (DECISIONS.md D-002, D-004).
+# Upgrades go through docs/security/LITELLM_VERSION_POLICY.md.
 dependencies = [
-    "litellm[proxy]>=1.82.0",
-    "openai>=2.26.0",
+    "litellm[proxy]==1.82.0",
+    "openai>=2.26.0,<3",
     "requests>=2.32.5",
     "python-dotenv>=1.0.1",
 ]
@@ -16,4 +19,11 @@ dev = ["pytest>=8.0.0", "ruff>=0.4.0"]
 local-prompt-guard = [
     "transformers>=4.40.0",
     "torch>=2.0.0",
+]
+
+[tool.pytest.ini_options]
+# Integration tests boot a live proxy; run them explicitly with -m integration
+addopts = "-m 'not integration'"
+markers = [
+    "integration: live LiteLLM proxy end-to-end tests (opt-in: -m integration)",
 ]

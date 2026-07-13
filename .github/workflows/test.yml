@@ -33,10 +33,14 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        # --python overrides .python-version so the matrix version is used
+        run: uv sync --extra dev --python ${{ matrix.python-version }}
 
       - name: Run tests
         run: uv run pytest tests/ -v
+
+      - name: Run live-proxy integration tests
+        run: uv run pytest -m integration -v
 
       - name: Lint with ruff (optional)
         run: uv run ruff check . || true
