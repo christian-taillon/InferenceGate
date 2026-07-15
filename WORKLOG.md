@@ -304,3 +304,75 @@ Never rewrite or delete prior entries. Newest entry last.
   LiteLLM objects. P1 strict review can run in parallel (OpenCode
   review-ollama-strict) — precedence/mode/fail-closed changes need a
   DECISIONS entry.
+
+---
+
+## 2026-07-15 — Shield maturity pass (Guardian Garden readiness, D-012)
+
+- **Agent:** Claude Code (claude-fable-5), interactive session
+- **Task IDs:** p4.shield-maturity (new, completed). User directive: mature,
+  correct, and improve the five guardrails; prepare them for LiteLLM's
+  Guardian Garden.
+- **Files changed:** `firewall_callbacks.py` (restructured),
+  `config.yaml` (documented per-shield knobs), `tests/test_firewall.py`,
+  `tests/test_log_leaks.py`, `pyproject.toml` (+httpx), `AGENTS.md`,
+  `DECISIONS.md` (D-012), `TASKS.yaml`.
+- **What changed (detail in D-012):**
+  - Blocks now raise `fastapi.HTTPException(400, {"error": BLOCKED_MESSAGE})`
+    — LiteLLM's `_is_guardrail_intervention` convention — so guardrail
+    telemetry records interventions instead of `guardrail_failed_to_respond`.
+    Client message unchanged and still generic.
+  - Strict Llama Guard parsing (`_parse_llama_guard_output`): first token
+    must be safe/unsafe; only taxonomy codes kept; malformed/empty output
+    raises `GuardOutputError` through the fail policy (was a silent allow).
+  - Per-shield config via litellm_params with env fallbacks; startup
+    validation for fail_mode/threshold/blocked_categories;
+    `os.environ/VAR` refs resolved. `blocked_categories` (S-codes or
+    names) scopes LlamaGuard/ResponseGuard; unsafe-without-codes blocks.
+  - Shared `_InferenceGateShield` base + `_LlamaGuardCore`; ResponseGuard
+    no longer duplicates LlamaGuard and gains Groq model resolution and the
+    unified `apply_guardrail(input_type="response")` path. Missing api_base
+    is now a fail-policy event (denies under fail_mode=closed).
+  - Remote Prompt Guard classify is async httpx with configurable timeout
+    and threshold; local shield gains `preload`. Latency (ms) logged on
+    every decision; logs stay content-free (log-leak suite still passes).
+- **Live finding:** the first cut put the hooks on a mixin — LiteLLM only
+  dispatches `apply_guardrail` when it is in `type(callback).__dict__`, so
+  the pre_call shields silently stopped running. Caught by
+  `tests/test_integration_proxy.py` (guard-order + block assertions), fixed
+  by defining hooks on each concrete class, pinned by
+  `TestHookDispatchContract`.
+- **Tests:** **149 unit passed** (new floor; was 100) + **4 integration
+  passed**; ruff clean. Note: run integration as
+  `uv run pytest tests/ -m integration -q` (bare collection now trips on
+  container-owned `pgdata/`).
+- **Exact next action:** unchanged — `p2.normalization` continues
+  (`inference_gate/normalization.py`, `controls.py`, `policy.py` are on
+  disk, uncommitted, from the parallel v2 track).
+
+---
+
+## 2026-07-15 (later) — Management-UI exposure + deployment polish (D-013)
+
+- **Agent:** Claude Code (claude-fable-5), interactive session
+- **Task IDs:** p4.shield-maturity (extended). User directive: keep local
+  configs authoritative but expose shield settings in the LiteLLM UI;
+  polish for people cloning and launching fresh.
+- **Files changed:** `firewall_callbacks.py` (UI config models,
+  `get_config_model`, `register_with_litellm_ui`), `tests/test_firewall.py`
+  (TestLiteLLMUIIntegration), `tests/test_integration_proxy.py`
+  (TestManagementUIExposure), `.env.example` (INFERENCE_GATE_FAIL_MODE,
+  LLAMA_PROMPT_GUARD_THRESHOLD), `README.md` (Management UI section),
+  `AGENTS.md` (floors), `DECISIONS.md` (D-013).
+- **Verified live** (integration suite, real proxy + stub upstream):
+  `/guardrails/list` shows all five configured shields;
+  `/guardrails/ui/provider_specific_params` offers the four
+  `inference_gate_*` providers with InferenceGate-branded names, fail_mode
+  fields, and blocked_categories as an S1–S14 multiselect. Note the
+  provider forms endpoint is `provider_specific_params`, NOT
+  `add_guardrail_settings` (first test draft hit the wrong one).
+- **Tests:** **152 unit + 6 integration** (new floors); ruff clean.
+- **Exact next action:** unchanged — `p2.normalization` v2 track. This
+  session also commits the on-disk v2 files (`inference_gate/controls.py`,
+  `inference_gate/policy.py`, `tests/test_engine.py`) so fresh clones
+  reproduce the documented test floor.

@@ -217,3 +217,83 @@ Statuses: `proposed` · `accepted` · `superseded` · `rejected`
 - **Consequences:** new task `p4.presidio-backend`; capability matrix (p05)
   records the verified mode support; deployment needs the two Presidio
   services only for tenants that enable it.
+
+## D-012 — Shield maturity pass: HTTPException blocks, strict guard parsing, per-shield config
+
+- **Status:** accepted
+- **Date:** 2026-07-15 · **Agent:** claude-code (user directive: mature the
+  guardrails for LiteLLM Guardian Garden membership)
+- **Context:** The five-shield pipeline had demo-era rough edges: blocks
+  raised `litellm.BadRequestError` (logged by LiteLLM as
+  `guardrail_failed_to_respond`, not an intervention); Llama Guard output
+  was parsed leniently (`"unsafe" in verdict` — a degraded guard model that
+  answers prose silently *allowed* traffic); all configuration was
+  env-var-only and global; `ResponseGuardShield` missed the Groq model
+  resolution and duplicated LlamaGuard code; hooks were dispatched through
+  a mixin that LiteLLM's `type(callback).__dict__` check cannot see (caught
+  live by the integration suite — inherited hooks silently never run).
+- **Decision:**
+  1. Policy blocks raise `fastapi.HTTPException(status_code=400,
+     detail={"error": BLOCKED_MESSAGE})` — the convention LiteLLM
+     recognizes as a guardrail *intervention* in
+     `StandardLoggingGuardrailInformation` and metrics. Message stays
+     generic (no shield names, labels, scores, or S-codes to clients).
+  2. Llama Guard output is parsed strictly (first token exactly
+     `safe`/`unsafe`; only taxonomy codes kept). Malformed output raises
+     `GuardOutputError` and routes through the fail policy — a fail-policy
+     event, never a silent allow (aligns with D-008 §4 ahead of P4).
+  3. Every shield accepts `litellm_params` config (api_base, api_key,
+     model, fail_mode, threshold, blocked_categories, timeout, preload)
+     with the legacy env vars as fallbacks; invalid config (bad fail_mode,
+     out-of-range threshold, unknown category) fails at proxy startup.
+  4. `blocked_categories` scopes which S1–S14 categories block; an unsafe
+     verdict without a recognizable category always blocks (deny by
+     default). Missing api_base is now a fail-policy event too (deny when
+     fail_mode=closed, was silently skipped).
+  5. Hook methods are defined on every concrete shield class, pinned by a
+     dispatch-contract test; `ResponseGuardShield` gained the unified
+     `apply_guardrail(input_type="response")` path and shares
+     `_LlamaGuardCore` with `LlamaGuardShield` (Groq resolution bug fixed
+     by construction).
+- **Alternatives:** keep BadRequestError (rejected — misclassified in
+  guardrail telemetry); lenient guard parsing (rejected — silent allow on
+  guard degradation is a bypass); config-only via env (rejected — Guardian
+  Garden guardrails are configured per-instance in config.yaml).
+- **Consequences:** unit floor rises 100 → 149; P4 adapter work inherits a
+  clean per-shield config surface; the `legacy-default` parity target now
+  includes the strict-parse fail-policy semantics.
+
+## D-013 — Management-UI exposure via litellm's guardrail registries
+
+- **Status:** accepted
+- **Date:** 2026-07-15 · **Agent:** claude-code (user directive: manage local
+  configs, expose things in the UI as well)
+- **Context:** The LiteLLM dashboard builds its Add Guardrail provider list
+  dynamically from `/guardrails/ui/provider_specific_params`, which iterates
+  `guardrail_class_registry` and renders each provider's
+  `get_config_model()` pydantic fields as typed forms (verified in the
+  1.82.0 UI bundle: the provider map merges endpoint keys via
+  `ui_friendly_name`). Config-file guardrails are listed but not editable
+  in the UI; DB-created guardrails initialize through
+  `guardrail_initializer_registry` or a dotted `guardrail:` path.
+- **Decision:**
+  1. Each shield implements `get_config_model()` returning a
+     `GuardrailConfigModel` subclass (api_base/api_key/model/fail_mode plus
+     shield-specific knobs; `blocked_categories` renders as an S1–S14
+     multiselect).
+  2. `register_with_litellm_ui()` inserts the four shields into
+     `guardrail_class_registry` and `guardrail_initializer_registry` under
+     `inference_gate_*` provider names at import time — best-effort with
+     `setdefault` and a logged no-op if litellm's internals move (the
+     version is pinned; upgrades revalidate via the integration test).
+  3. Division of authority: `config.yaml` remains the source of truth for
+     the default pipeline; UI-created guardrails are DB-managed additions.
+     At least one `firewall_callbacks.*` reference must remain in
+     config.yaml — importing the module is what performs registration.
+- **Alternatives:** UI-only management via DB guardrails (rejected — the
+  pipeline must be reviewable/versionable config); no UI exposure
+  (rejected — user requirement).
+- **Consequences:** integration suite gains UI-endpoint assertions
+  (providers present, category multiselect rendered); unit floor 152 + 6
+  integration. Registry mutation is the one deliberate dependency on
+  litellm-internal layout — guarded, tested, and pinned.

@@ -31,8 +31,8 @@ action, and confirm no plaintext secret entered any log, fixture, or report.
 
 ```bash
 uv sync --extra dev              # install (uv.lock is the source of truth; Python pinned 3.13 — 3.14 breaks the proxy via uvloop)
-uv run pytest tests/ -q          # unit tests — floor: 100 passed
-uv run pytest -m integration -q  # live proxy vs stub upstream — floor: 4 passed, no creds needed
+uv run pytest tests/ -q          # unit tests — floor: 152 passed
+uv run pytest tests/ -m integration -q  # live proxy vs stub upstream — floor: 6 passed, no creds needed (scope to tests/: bare collection hits pgdata/)
 uv run ruff check .              # lint — baseline: clean
 uv run python serve.py --env .env       # run the proxy on :8001 (needs real .env)
 uv run python demo.py --env .env        # live demo battery against the proxy
@@ -45,7 +45,7 @@ proxy or provider. `demo.py` and `smoke_test.py` need real provider creds.
 
 ## Repository constraints
 
-- **Test floor is 100 unit + 4 integration** (legacy baseline was 78; the
+- **Test floor is 152 unit + 6 integration** (legacy baseline was 78; the
   "39" in older docs is stale). Never finish with fewer passing tests than
   the floor.
 - `inference_gate/contracts.py` is the normative control-plane vocabulary
@@ -60,7 +60,8 @@ proxy or provider. `demo.py` and `smoke_test.py` need real provider creds.
 - The LiteLLM master key must never default: `serve.py` refuses to start with
   an unset or default key. Preserve this invariant.
 - Client-facing block errors must stay generic (`BLOCKED_MESSAGE` in
-  `firewall_callbacks.py:39`). Shield detail goes to server logs only.
+  `firewall_callbacks.py`); blocks raise `fastapi.HTTPException(400)` so
+  LiteLLM logs a guardrail intervention. Shield detail goes to server logs only.
 
 ## Security invariants (never silently bypassable)
 
@@ -86,6 +87,114 @@ proxy or provider. `demo.py` and `smoke_test.py` need real provider creds.
   Secretlint (MIT), Nosey Parker (Apache-2.0, legacy only). **Never** from
   TruffleHog (AGPL), DataSentry (GPL), Semgrep community rules, or
   unknown-license sources. Record provenance in `config/security/sources.lock.yaml`.
+
+## Running deployment
+
+The proxy runs as a foreground process (not a systemd service) inside a tmux
+session named `litellm`. A PostgreSQL container backs the management UI.
+
+### Process
+
+- **LiteLLM proxy**: `uv run python serve.py --env .env` on port `0.0.0.0:8001`
+- **tmux session**: `litellm` (attach with `tmux a -t litellm`)
+- **serve.py**: loads `.env`, refuses to start with an unset or default
+  `LITELLM_MASTER_KEY`, then spawns `.venv/bin/litellm --config config.yaml`
+
+### PostgreSQL (management UI backend)
+
+The LiteLLM management UI (`/ui/`) requires a database for user auth and key
+management. A Podman container provides PostgreSQL:
+
+| Field | Value |
+|-------|-------|
+| Container | `litellm-postgres` (Podman, not systemd-managed) |
+| Image | `docker.io/library/postgres:16` |
+| Port | `127.0.0.1:5433 -> 5432` (localhost only) |
+| Data | bind mount `./pgdata/ -> /var/lib/postgresql/data` |
+| DB / User | `litellm` / `litellm` |
+| Connection string | `DATABASE_URL` in `.env` (points at `localhost:5433`) |
+
+The `pgdata/` directory is owned by the container's postgres UID (not your
+host user) with `0700` perms — this is normal. Do not delete it; it holds the
+management UI's user/key/spend data.
+
+Start/stop the database:
+
+```bash
+podman start litellm-postgres   # start
+podman stop litellm-postgres     # stop
+```
+
+### Management UI
+
+- **URL**: `http://<host-ip>:8001/ui/`
+- **Login**: use `LITELLM_MASTER_KEY` from `.env` as the API key
+- The UI requires both PostgreSQL running and `DATABASE_URL` set in `.env`
+
+### Client connections (OpenAI-compatible API)
+
+| Field | Value |
+|-------|-------|
+| Base URL | `http://<host-ip>:8001/v1` |
+| API Key | `LITELLM_MASTER_KEY` from `.env` |
+| Model name | `firewall-model` |
+
+All five guardrails run automatically on every request through `firewall-model`.
+
+### Startup sequence (full)
+
+```bash
+# 1. Start PostgreSQL
+podman start litellm-postgres
+
+# 2. Start LiteLLM proxy (in a tmux session)
+tmux new -s litellm
+cd ~/github/litellm-firewall
+uv run python serve.py --env .env
+# Ctrl-B D to detach
+
+# 3. Verify
+curl http://localhost:8001/health/liveness   # "I'm alive!"
+curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" http://localhost:8001/v1/models
+```
+
+### Shutdown sequence
+
+```bash
+# 1. Stop the proxy (Ctrl-C in the tmux session, or kill the process)
+tmux send-keys -t litellm C-c
+
+# 2. Stop PostgreSQL
+podman stop litellm-postgres
+```
+
+### Guardrail pipeline (config.yaml)
+
+Five shields, all `default_on: true`, attached to `firewall-model`:
+
+| # | Shield | Mode | Type | Catches |
+|---|--------|------|------|---------|
+| 1 | `inference-gate` | pre_call | Regex/prebuilt | PII, credit cards, secrets, SQL injection, prompt injection |
+| 2 | `llama-prompt-guard` | pre_call | LLM classifier (API) | Jailbreak / prompt injection |
+| 3 | `prompt-guard-local` | pre_call | Local HF transformers | On-device prompt-attack classifier |
+| 4 | `llama-guard` | pre_call | LLM classifier (API) | Harmful content (Llama Guard 3 taxonomy S1-S14) |
+| 5 | `response-guard` | post_call | LLM classifier (API) | Output-side exfil/toxic/secret echo |
+
+Advisory shields fail open by default — configurable globally via
+`INFERENCE_GATE_FAIL_MODE` or per guardrail via `litellm_params.fail_mode`.
+Every shield knob (model, api_base/api_key, threshold, blocked_categories,
+timeout, preload) is a `litellm_params` key with env-var fallbacks — the
+config surface is documented in the `firewall_callbacks.py` module docstring
+and inline in `config.yaml`. Block messages are generic (`BLOCKED_MESSAGE`
+in `firewall_callbacks.py`).
+
+### Key files
+
+- `serve.py` — startup script, enforces master key invariant
+- `config.yaml` — live proxy config (model list, guardrails, settings)
+- `firewall_callbacks.py` — custom guardrail shield implementations
+- `.env` — credentials (gitignored, never read into context or commit)
+- `pgdata/` — PostgreSQL data (bind mount, container-owned, gitignored)
 
 ## File ownership conventions
 
