@@ -65,30 +65,53 @@ guardrails:
           pattern: "(?i)\\b(ignore\\s+(all\\s+)?previous\\s+instructions\\b|system\\s+prompt\\b|DAN\\s+mode\\b|you\\s+are\\s+now\\s+(a|an)\\b|act\\s+as\\s+(a|an)\\b)"
           action: "BLOCK"
 
-  # Phase 2: Prompt attack classifier for jailbreaks and prompt injections
+  # Layer 2: Prompt attack classifier for jailbreaks and prompt injections
+  # (Llama Prompt Guard 2 via a vLLM /classify endpoint or Groq chat).
   - guardrail_name: "llama-prompt-guard"
     litellm_params:
       guardrail: firewall_callbacks.LlamaPromptGuardShield
       mode: "pre_call"
       default_on: true
+      # Optional (env fallbacks in parentheses — see firewall_callbacks.py):
+      # model: meta-llama/llama-prompt-guard-2-86m  # (LLAMA_PROMPT_GUARD_MODEL)
+      # api_base: os.environ/GUARD_API_BASE  # (LLAMA_PROMPT_GUARD_API_BASE, LITELLM_API_BASE)
+      # api_key: os.environ/GUARD_API_KEY    # (LLAMA_PROMPT_GUARD_API_KEY, LITELLM_API_KEY)
+      # threshold: 0.5                       # malicious-score cutoff (LLAMA_PROMPT_GUARD_THRESHOLD)
+      # timeout: 30                          # classify-endpoint timeout, seconds
+      # fail_mode: open                      # open|closed (INFERENCE_GATE_FAIL_MODE)
 
-  # Phase 2b: Local on-device prompt attack classifier (HuggingFace transformers)
+  # Layer 2b: Same classifier run on-device via HuggingFace transformers
+  # (no network dependency; requires `uv sync --extra local-prompt-guard`).
   - guardrail_name: "prompt-guard-local"
     litellm_params:
       guardrail: firewall_callbacks.PromptGuardLocalShield
       mode: "pre_call"
       default_on: true
+      # Optional:
+      # model: meta-llama/Llama-Prompt-Guard-2-86M  # (PROMPT_GUARD_LOCAL_MODEL)
+      # threshold: 0.5                              # (PROMPT_GUARD_LOCAL_THRESHOLD)
+      # preload: true    # load the model at startup, not on the first request
+      # fail_mode: open
 
-  # Phase 3: Custom Llama Guard integration for harmful content
+  # Layer 3: Llama Guard 3 content-safety taxonomy (S1-S14) on requests.
   - guardrail_name: "llama-guard"
     litellm_params:
       guardrail: firewall_callbacks.LlamaGuardShield
       mode: "pre_call"
       default_on: true
+      # Optional:
+      # model: openai/llama-guard3:1b        # (LLAMA_GUARD_MODEL)
+      # api_base: os.environ/GUARD_API_BASE  # (LLAMA_GUARD_API_BASE, LITELLM_API_BASE)
+      # api_key: os.environ/GUARD_API_KEY    # (LLAMA_GUARD_API_KEY, LITELLM_API_KEY)
+      # blocked_categories: [S1, S4, S9]     # S-codes or names; omit to block all
+      # fail_mode: open
 
-  # Phase 6: Response-side scanning (catches exfil/toxic/secret echo in output)
+  # Layer 4: Response-side scanning — catches exfil/toxic/secret echo in the
+  # model output, including proposed tool calls. Non-streaming only (D-005).
   - guardrail_name: "response-guard"
     litellm_params:
       guardrail: firewall_callbacks.ResponseGuardShield
       mode: "post_call"
       default_on: true
+      # Optional: same knobs as llama-guard (model, api_base, api_key,
+      # blocked_categories, fail_mode)

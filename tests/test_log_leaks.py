@@ -62,8 +62,8 @@ class TestNoContentInLogs:
 
         monkeypatch.setattr(FIREWALL_CALLBACKS.litellm, "acompletion", fake_acompletion)
         with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
-            with pytest.raises(FIREWALL_CALLBACKS.BadRequestError) as exc_info:
-                asyncio.run(shield._run_llama_guard(f"my key is {CANARY}", "demo"))
+            with pytest.raises(FIREWALL_CALLBACKS.HTTPException) as exc_info:
+                asyncio.run(shield._scan_text(f"my key is {CANARY}"))
         assert CANARY not in caplog.text
         assert CANARY not in str(exc_info.value)
 
@@ -78,8 +78,8 @@ class TestNoContentInLogs:
 
         monkeypatch.setattr(FIREWALL_CALLBACKS.litellm, "acompletion", fake_acompletion)
         with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
-            with pytest.raises(FIREWALL_CALLBACKS.BadRequestError):
-                asyncio.run(shield._run_llama_guard("hello", "demo"))
+            with pytest.raises(FIREWALL_CALLBACKS.HTTPException):
+                asyncio.run(shield._scan_text("hello"))
         assert "S7" in caplog.text
         assert CANARY not in caplog.text
 
@@ -93,10 +93,8 @@ class TestNoContentInLogs:
 
         monkeypatch.setattr(FIREWALL_CALLBACKS.litellm, "acompletion", fake_acompletion)
         with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
-            with pytest.raises(FIREWALL_CALLBACKS.BadRequestError):
+            with pytest.raises(FIREWALL_CALLBACKS.HTTPException):
                 asyncio.run(
-                    shield._run_llama_guard_response(
-                        f"the secret is {CANARY}", "demo"
-                    )
+                    shield._scan_text(f"the secret is {CANARY}")
                 )
         assert CANARY not in caplog.text

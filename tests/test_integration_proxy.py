@@ -219,3 +219,49 @@ class TestProxyEndToEnd:
         assert BLOCKED_MESSAGE in resp.text
         # The unsafe model output must not leak through the error path.
         assert UNSAFE_MARKER not in resp.text
+
+
+class TestManagementUIExposure:
+    """The management UI must see the configured pipeline and offer the
+    shields as first-class providers with typed config forms."""
+
+    def test_configured_guardrails_listed(self, proxy):
+        headers = {"Authorization": f"Bearer {MASTER_KEY}"}
+        resp = requests.get(
+            f"{proxy}/guardrails/list", headers=headers, timeout=30
+        )
+        assert resp.status_code == 200
+        for name in (
+            "inference-gate",
+            "llama-prompt-guard",
+            "prompt-guard-local",
+            "llama-guard",
+            "response-guard",
+        ):
+            assert name in resp.text
+
+    def test_shields_offered_as_ui_providers_with_config_forms(self, proxy):
+        headers = {"Authorization": f"Bearer {MASTER_KEY}"}
+        resp = requests.get(
+            f"{proxy}/guardrails/ui/provider_specific_params",
+            headers=headers,
+            timeout=30,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        for provider in (
+            "inference_gate_prompt_guard",
+            "inference_gate_prompt_guard_local",
+            "inference_gate_llama_guard",
+            "inference_gate_response_guard",
+        ):
+            assert provider in data, f"{provider} missing from UI providers"
+            fields = data[provider]
+            assert str(fields.get("ui_friendly_name", "")).startswith(
+                "InferenceGate"
+            )
+            assert "fail_mode" in fields
+        # category picker renders as a multiselect of taxonomy codes
+        categories = data["inference_gate_llama_guard"]["blocked_categories"]
+        assert categories["type"] == "multiselect"
+        assert "S1" in categories["options"]

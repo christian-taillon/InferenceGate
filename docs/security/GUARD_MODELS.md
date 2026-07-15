@@ -122,7 +122,7 @@ content never leaves the gateway.
   document contains an injection.**
 - Long content: never silently truncate. Tokenize → overlapping segments
   (repo baseline: 350 words / 50 overlap / 512-token cap,
-  `firewall_callbacks.py:34-36`) → preserve offsets/metadata → parallel scan
+  `firewall_callbacks.py:96-98`) → preserve offsets/metadata → parallel scan
   → document score = max segment malicious probability → retain every
   suspicious segment location → consider cross-segment distributed attacks →
   cap how much untrusted content one downstream context may combine.
@@ -142,9 +142,9 @@ content never leaves the gateway.
 - **Privacy (S7) findings identify that sensitive content exists, not the
   spans.** On S7: invoke deterministic DLP → find exact spans → apply
   masking/dehydration/blocking → record both findings.
-- Strict native-output parsing: accept exactly `safe` or
-  `unsafe\nS2,S14`; reject anything else. No inferred categories, no silent
-  repair.
+- Strict native-output parsing (implemented D-012): accept exactly `safe` or
+  `unsafe\nS2,S14`; reject anything else via `GuardOutputError` through the
+  fail policy. No inferred categories, no silent repair.
 - Provider limitation: verify the runtime genuinely supports input *and*
   output classification (provider chat template may differ from direct
   Transformers/vLLM). Do not enable custom taxonomies, category exclusions,
@@ -348,10 +348,10 @@ model is optional.
 
 | Existing code | Becomes |
 |---|---|
-| `LlamaPromptGuardShield` (remote `/classify` + chat fallback) | Prompt Guard backend, `remote` strategy |
-| `PromptGuardLocalShield` (HF transformers) | Prompt Guard backend, `local` strategy — same logical classifier |
-| `LlamaGuardShield` (S1–S14 parse) | Llama Guard reviewer backend (parser must be tightened to strict accept/reject) |
-| `ResponseGuardShield` | Llama Guard reviewer placed at `provider.response` |
+| `LlamaPromptGuardShield` (remote `/classify` + chat fallback) | Prompt Guard backend, `remote` strategy (D-012: async httpx, configurable threshold/timeout) |
+| `PromptGuardLocalShield` (HF transformers) | Prompt Guard backend, `local` strategy — same logical classifier (D-012: `preload` option) |
+| `LlamaGuardShield` (S1–S14 parse) | Llama Guard reviewer backend (D-012: strict parse, `blocked_categories` scoping, `fail_mode` per shield) |
+| `ResponseGuardShield` | Llama Guard reviewer placed at `provider.response` (D-012: shares `_LlamaGuardCore`, unified `apply_guardrail(input_type="response")` path, scans tool calls) |
 | — (new) | Granite Guardian criterion reviewer |
 | — (new) | gpt-oss-safeguard policy reviewer |
 | — (new) | Provider registry + capability verification |

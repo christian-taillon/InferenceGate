@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-12
+updated_at: 2026-07-15
 
 # Machine-readable task state for the InferenceGate v2 transformation.
 # Allowed states: pending ready in_progress blocked review completed rejected deferred
@@ -222,6 +222,37 @@ tasks:
     acceptance_criteria: [Shared fixtures equivalent in both products]
     tests: []
     notes: [Pin exact Telltale commit before writing the loader.]
+
+  - id: p4.shield-maturity
+    title: Mature the five shields for Guardian Garden membership (D-012)
+    phase: p4-legacy-migration
+    status: completed
+    owner_agent: claude-code (2026-07-15, user directive)
+    files: [firewall_callbacks.py, config.yaml, tests/test_firewall.py, tests/test_log_leaks.py]
+    dependencies: []
+    acceptance_criteria:
+      - Blocks raise fastapi HTTPException(400) with the generic message so
+        LiteLLM records a guardrail intervention, not a guardrail failure
+      - Llama Guard output parsed strictly; malformed output is a
+        fail-policy event (GuardOutputError), never a silent allow
+      - Per-shield litellm_params config (api_base/api_key/model/fail_mode/
+        threshold/blocked_categories/timeout/preload) with env fallbacks;
+        invalid config fails at proxy startup
+      - blocked_categories scopes S1-S14; unsafe-without-codes still blocks
+      - Hooks defined on every concrete class (litellm dispatch checks
+        type(callback).__dict__; inherited hooks silently never run) —
+        pinned by TestHookDispatchContract
+      - ResponseGuard shares _LlamaGuardCore (Groq resolution bug fixed) and
+        supports the unified apply_guardrail response path
+    tests:
+      - "uv run pytest tests/ -q  # 149 passed (new floor)"
+      - "uv run pytest tests/ -m integration -q  # 4 passed"
+    notes:
+      - Integration suite caught a real bypass during this work - hook
+        methods on a mixin are invisible to litellm's dispatch check and the
+        pre_call shields stopped running. Keep the dispatch-contract test.
+      - Remote Prompt Guard classify path now async httpx (was blocking
+        urllib in a thread); httpx declared as a direct dependency.
 
   - id: p4.legacy-migration
     title: Convert five shields into control adapters; legacy-default parity profile
