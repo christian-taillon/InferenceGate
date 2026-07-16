@@ -78,7 +78,7 @@ Invalid config (bad `fail_mode`, out-of-range `threshold`, unknown category) fai
     ```
 3.  **Install Dependencies**:
     ```bash
-    uv sync  # or: pip install -r requirements.txt
+    uv sync  # installs the package plus dev + deployment dependency groups
     ```
 
 ## Running the Service (for Open WebUI)
@@ -104,6 +104,40 @@ For an auto-advancing version of the demo, pass a delay in seconds:
 ```bash
 uv run demo.py --delay 2
 ```
+
+## Bring your own LiteLLM proxy
+
+The shields are a pip-installable package (`inference-gate`) — you don't need this repo's deployment to use them. On the machine running **your existing LiteLLM proxy**:
+
+```bash
+pip install git+https://github.com/christian-taillon/InferenceGate.git
+```
+
+LiteLLM loads config-file guardrail classes from `.py` files **relative to the config directory** (verified at 1.82.0 — there is no installed-package fallback), so drop a one-line adapter next to your `config.yaml`:
+
+```python
+# firewall_callbacks.py — adapter so LiteLLM can find the installed package
+from inference_gate.shields import *  # noqa: F401,F403
+```
+
+Then attach shields in your `config.yaml` exactly as this repo does:
+
+```yaml
+guardrails:
+  - guardrail_name: llama-guard
+    litellm_params:
+      guardrail: firewall_callbacks.LlamaGuardShield
+      mode: pre_call
+      default_on: true
+      model: openai/llama-guard3:1b
+      api_base: os.environ/GUARD_API_BASE
+      blocked_categories: [S1, S4, S9]
+      fail_mode: closed
+```
+
+Once the module is imported, the shields also register as `inference_gate_*` providers, so additional instances can be created from the LiteLLM UI.
+
+**Version compatibility**: the shields are tested against `litellm==1.82.0` (the version this repo pins). The package declares `litellm>=1.82.0`; guardrail hook dispatch is litellm-internal behavior, so after changing litellm versions run the credential-free compatibility suite from this repo: `uv run pytest tests/ -m integration`.
 
 ## Management UI
 

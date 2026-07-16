@@ -30,7 +30,7 @@ action, and confirm no plaintext secret entered any log, fixture, or report.
 ## Commands
 
 ```bash
-uv sync --extra dev              # install (uv.lock is the source of truth; Python pinned 3.13 — 3.14 breaks the proxy via uvloop)
+uv sync                          # install: package + dev/deployment groups (uv.lock is truth; Python pinned 3.13 — 3.14 breaks the proxy via uvloop)
 uv run pytest tests/ -q          # unit tests — floor: 152 passed
 uv run pytest tests/ -m integration -q  # live proxy vs stub upstream — floor: 6 passed, no creds needed (scope to tests/: bare collection hits pgdata/)
 uv run ruff check .              # lint — baseline: clean
@@ -60,7 +60,7 @@ proxy or provider. `demo.py` and `smoke_test.py` need real provider creds.
 - The LiteLLM master key must never default: `serve.py` refuses to start with
   an unset or default key. Preserve this invariant.
 - Client-facing block errors must stay generic (`BLOCKED_MESSAGE` in
-  `firewall_callbacks.py`); blocks raise `fastapi.HTTPException(400)` so
+  `inference_gate/shields.py`); blocks raise `fastapi.HTTPException(400)` so
   LiteLLM logs a guardrail intervention. Shield detail goes to server logs only.
 
 ## Security invariants (never silently bypassable)
@@ -184,22 +184,25 @@ Advisory shields fail open by default — configurable globally via
 `INFERENCE_GATE_FAIL_MODE` or per guardrail via `litellm_params.fail_mode`.
 Every shield knob (model, api_base/api_key, threshold, blocked_categories,
 timeout, preload) is a `litellm_params` key with env-var fallbacks — the
-config surface is documented in the `firewall_callbacks.py` module docstring
+config surface is documented in the `inference_gate/shields.py` module docstring
 and inline in `config.yaml`. Block messages are generic (`BLOCKED_MESSAGE`
-in `firewall_callbacks.py`).
+in `inference_gate/shields.py`).
 
 ### Key files
 
 - `serve.py` — startup script, enforces master key invariant
 - `config.yaml` — live proxy config (model list, guardrails, settings)
-- `firewall_callbacks.py` — custom guardrail shield implementations
+- `inference_gate/shields.py` — custom guardrail shield implementations
+  (pip package `inference-gate`; `firewall_callbacks.py` at the repo root
+  is a compat shim for config-file loading — see D-014)
 - `.env` — credentials (gitignored, never read into context or commit)
 - `pgdata/` — PostgreSQL data (bind mount, container-owned, gitignored)
 
 ## File ownership conventions
 
-- `firewall_callbacks.py` — legacy shield pipeline; being migrated to a thin
-  LiteLLM adapter. Keep it working until `legacy-default` parity tests pass.
+- `inference_gate/shields.py` — the shield pipeline (LiteLLM adapter layer);
+  `firewall_callbacks.py` is a compat shim that must keep re-exporting it
+  (config-file guardrail references load by file path — D-014).
 - `config.yaml` — live LiteLLM proxy config for the legacy pipeline.
 - `docs/security/` — design docs and reports for the transformation.
 - `TASKS.yaml` / `WORKLOG.md` / `DECISIONS.md` / `PLAN.md` — canonical work

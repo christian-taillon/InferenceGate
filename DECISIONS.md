@@ -297,3 +297,45 @@ Statuses: `proposed` · `accepted` · `superseded` · `rejected`
   (providers present, category multiselect rendered); unit floor 152 + 6
   integration. Registry mutation is the one deliberate dependency on
   litellm-internal layout — guarded, tested, and pinned.
+
+## D-014 — Package the shields for bring-your-own-LiteLLM; pin stays in the deployment
+
+- **Status:** accepted
+- **Date:** 2026-07-16 · **Agent:** claude-code (user directive: host the
+  firewalling solution independently of litellm — "bring your own litellm")
+- **Context:** The repo conflated the firewalling logic with the reference
+  deployment hosting it. Verified at litellm 1.82.0:
+  `get_instance_fn(value, config_file_path)` loads config-file guardrail
+  classes **only** from .py files relative to the config directory — no
+  installed-package fallback — so a pure pip package needs a one-file
+  adapter next to the consumer's config.
+- **Decision:**
+  1. Shields move to `inference_gate/shields.py`; the repo root keeps a
+     `firewall_callbacks.py` compat shim (`from inference_gate.shields
+     import *`) so existing config references keep working. config.yaml
+     continues to reference the shim — exercising it end-to-end in the
+     integration suite.
+  2. The project builds as pip package `inference-gate` (hatchling; wheel
+     ships only `inference_gate/`). Library dependencies are exactly
+     `litellm[proxy]>=1.82.0` + `httpx`.
+  3. Version policy split: package metadata declares the open tested range
+     (`>=1.82.0`); the reference deployment stays exactly pinned via
+     `[tool.uv].constraint-dependencies = ["litellm==1.82.0"]` + uv.lock.
+     This refines D-002 (the exact-pin intent now lives in the uv
+     constraint, not project metadata). The integration suite is the
+     compatibility battery to run before adopting any new litellm version.
+  4. Dev/deployment-only dependencies (pytest, ruff, requests, openai,
+     python-dotenv, prisma) move to PEP 735 dependency-groups with
+     `tool.uv.default-groups = ["dev", "deployment"]`, so `uv sync` and
+     `uv run serve.py` keep working locally while the published wheel
+     stays lean.
+  5. Enforcement remains gateway-resident by nature: detection/policy can
+     be hosted independently (P5+ sidecar via litellm's
+     generic_guardrail_api is the roadmap), but a thin, contract-tested
+     litellm adapter always remains.
+- **Alternatives:** separate library repo (rejected for now — one repo,
+  two artifacts is enough); exact litellm pin in package metadata
+  (rejected — makes BYO installs conflict with the consumer's litellm).
+- **Consequences:** BYO documented in README; CI builds the wheel; unit
+  floor 153 (+shim identity test). requirements.txt regenerated from the
+  new layout.
