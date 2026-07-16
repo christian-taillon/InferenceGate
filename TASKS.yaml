@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-15
+updated_at: 2026-07-16
 
 # Machine-readable task state for the InferenceGate v2 transformation.
 # Allowed states: pending ready in_progress blocked review completed rejected deferred
@@ -253,6 +253,10 @@ tasks:
         pre_call shields stopped running. Keep the dispatch-contract test.
       - Remote Prompt Guard classify path now async httpx (was blocking
         urllib in a thread); httpx declared as a direct dependency.
+      - 2026-07-16 (D-014): shields packaged as pip 'inference-gate'
+        (inference_gate/shields.py); firewall_callbacks.py is a compat
+        shim. BYO-LiteLLM documented in README. Floors: 153 unit + 6
+        integration.
 
   - id: p4.legacy-migration
     title: Convert five shields into control adapters; legacy-default parity profile

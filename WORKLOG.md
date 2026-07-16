@@ -376,3 +376,25 @@ Never rewrite or delete prior entries. Newest entry last.
   session also commits the on-disk v2 files (`inference_gate/controls.py`,
   `inference_gate/policy.py`, `tests/test_engine.py`) so fresh clones
   reproduce the documented test floor.
+
+---
+
+## 2026-07-16 — Packaging split: bring-your-own-LiteLLM (D-014)
+
+- **Agent:** Claude Code (claude-fable-5), interactive session
+- **Task IDs:** p4.shield-maturity (extended); user directive to make the
+  firewalling solution installable on top of any LiteLLM proxy.
+- **Changes:** `firewall_callbacks.py` → `inference_gate/shields.py`
+  (git mv, history preserved) with a repo-root compat shim; pyproject
+  gains hatchling build (`uv build` ships only `inference_gate/`),
+  dependency-groups dev/deployment with uv default-groups, and
+  `constraint-dependencies = ["litellm==1.82.0"]` carrying the D-002 pin
+  while package metadata opens to `>=1.82.0`. CI: plain `uv sync`,
+  integration path fix, wheel build step. README gains the BYO recipe
+  (adapter-file pattern — required because litellm's config loader has no
+  installed-package fallback). requirements.txt regenerated.
+- **Verified:** wheel contains only the package; METADATA deps are
+  litellm[proxy]>=1.82.0 + httpx; shim identity test (config classes ARE
+  the packaged classes); full suites through the shim live.
+- **Tests:** **153 unit + 6 integration**, ruff clean.
+- **Exact next action:** unchanged — `p2.normalization` v2 track.

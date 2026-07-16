@@ -32,7 +32,7 @@ def _ensure_demo_importable():
 
 def _ensure_firewall_callbacks_importable():
     try:
-        return importlib.import_module("firewall_callbacks")
+        return importlib.import_module("inference_gate.shields")
     except ModuleNotFoundError:
         litellm_module = types.ModuleType("litellm")
 
@@ -75,7 +75,7 @@ def _ensure_firewall_callbacks_importable():
             "litellm.integrations.custom_guardrail", custom_guardrail_module
         )
         sys.modules.setdefault("litellm.exceptions", exceptions_module)
-        return importlib.import_module("firewall_callbacks")
+        return importlib.import_module("inference_gate.shields")
 
 
 DEMO = _ensure_demo_importable()
@@ -1049,6 +1049,26 @@ class TestUnifiedGuardrailInputs:
             )
         )
         assert seen == ["input text"]
+
+
+class TestCompatShim:
+    """The repo-root firewall_callbacks.py must keep config-file references
+    (guardrail: firewall_callbacks.<Shield>) resolving to the packaged
+    classes — LiteLLM loads config guardrails from .py files relative to
+    the config directory, not from installed packages."""
+
+    def test_shim_exports_the_packaged_shields(self):
+        shim = importlib.import_module("firewall_callbacks")
+        for cls_name in (
+            "LlamaPromptGuardShield",
+            "PromptGuardLocalShield",
+            "LlamaGuardShield",
+            "ResponseGuardShield",
+        ):
+            assert getattr(shim, cls_name) is getattr(
+                FIREWALL_CALLBACKS, cls_name
+            ), f"shim {cls_name} is not the packaged class"
+        assert shim.BLOCKED_MESSAGE == FIREWALL_CALLBACKS.BLOCKED_MESSAGE
 
 
 class TestLiteLLMUIIntegration:
