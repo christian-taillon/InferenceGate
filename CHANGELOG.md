@@ -5,6 +5,45 @@ User-visible behavior, configuration, compatibility, and security changes.
 
 ## Unreleased
 
+### Added (2026-07-15/16 — shield maturity, UI, packaging)
+- **Per-shield configuration** via `litellm_params` with env-var fallbacks:
+  `api_base`, `api_key`, `model`, `fail_mode`, `threshold`,
+  `blocked_categories`, `timeout`, `preload`. Invalid config fails at proxy
+  startup instead of at request time (D-012).
+- **Category scoping**: `blocked_categories` (S-codes or taxonomy names)
+  limits which Llama Guard 3 categories block; an unsafe verdict without a
+  recognizable category always blocks (deny by default).
+- **Management-UI integration** (D-013): the four shields register as
+  `inference_gate_*` guardrail providers with typed config forms
+  (fail-mode select, S1–S14 multiselect); `config.yaml` remains the source
+  of truth, UI-created guardrails are DB-managed additions.
+- **pip package `inference-gate`** (D-014): bring-your-own-LiteLLM installs
+  — the wheel ships only `inference_gate/` with
+  `litellm[proxy]>=1.82.0` + `httpx` as dependencies; BYO recipe in README.
+- Decision-level logging with latency on every shield evaluation
+  (content-free); integration tests for UI provider exposure.
+
+### Changed (2026-07-15/16)
+- **Blocks are now guardrail interventions**: shields raise
+  `fastapi.HTTPException(400)` (the form LiteLLM records as an intervention
+  in guardrail telemetry/metrics) instead of `litellm.BadRequestError`
+  (which was logged as a guardrail *failure*). The client-facing message is
+  unchanged and still generic.
+- **Strict Llama Guard parsing**: guard output must be exactly
+  `safe`/`unsafe` (+ S-codes). Malformed output is routed through the fail
+  policy (`GuardOutputError`) instead of silently allowing the request.
+- A missing guard API base is now a fail-policy event (denies under
+  `fail_mode: closed`; previously the shield silently skipped).
+- Shields moved to `inference_gate/shields.py`; root `firewall_callbacks.py`
+  is a compatibility shim for config-file references.
+- Package metadata now declares the tested-open range `litellm>=1.82.0`
+  for BYO installs, while this repo's deployment stays exactly pinned via
+  `tool.uv.constraint-dependencies` + `uv.lock` (refines the earlier
+  exact-pin entry below; D-014). Remote Prompt Guard classification now
+  uses async httpx (was blocking urllib in a thread).
+- `requirements.txt` is regenerated with `--no-emit-project` (deps only);
+  the Docker guide installs the package instead of the requirements export.
+
 ### Security
 - Shield logging is now content-free: all `print()` calls in
   `firewall_callbacks.py` were replaced with the `inference_gate.shields`

@@ -11,17 +11,19 @@ This guide provides instructions for deploying the InferenceGate in a containeri
 Create a `Dockerfile` to package the firewall and its custom callbacks.
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install the shields package; keep the deployment on the verified
+# LiteLLM version (DECISIONS.md D-002 / D-014)
+COPY pyproject.toml README.md LICENSE ./
+COPY inference_gate/ inference_gate/
+RUN pip install --no-cache-dir . "litellm[proxy]==1.82.0"
 
-# Copy configuration and callbacks
-COPY config.yaml .
-COPY firewall_callbacks.py .
+# Gateway config + loader shim (LiteLLM loads guardrail classes from
+# .py files relative to the config directory)
+COPY config.yaml firewall_callbacks.py ./
 
 # Expose LiteLLM Proxy port
 EXPOSE 8001
@@ -42,6 +44,9 @@ services:
     ports:
       - "8001:8001"
     environment:
+      # Required: the proxy refuses to start with an unset/default master key
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - MODEL=${MODEL}
       - LITELLM_API_BASE=${LITELLM_API_BASE}
       - LITELLM_API_KEY=${LITELLM_API_KEY}
       - REDIS_HOST=redis
