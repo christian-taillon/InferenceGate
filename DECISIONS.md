@@ -339,3 +339,35 @@ Statuses: `proposed` · `accepted` · `superseded` · `rejected`
 - **Consequences:** BYO documented in README; CI builds the wheel; unit
   floor 153 (+shim identity test). requirements.txt regenerated from the
   new layout.
+
+## D-015 — Automated litellm upgrade proposals + tested-version startup warning
+
+- **Status:** accepted
+- **Date:** 2026-07-17 · **Agent:** claude-code (user directive)
+- **Context:** The exact litellm pin (D-002/D-014) is only safe with a
+  deliberate upgrade cadence — a pinned proxy that stops receiving
+  litellm's own security fixes is its own risk. Dependabot alone cannot
+  drive the bump: the `tool.uv` constraint blocks its resolver, and PRs
+  opened with `GITHUB_TOKEN` do not trigger the Tests workflow, so a bump
+  PR would arrive ungated.
+- **Decision:**
+  1. A dedicated `litellm-bump` workflow (weekly + manual dispatch) checks
+     PyPI, applies the bump everywhere the version is recorded
+     (constraint, lock, `TESTED_LITELLM_VERSION`, README, Docker guide),
+     runs the full unit + live-proxy integration battery against the new
+     version **inside the workflow**, and opens a PR titled with the
+     battery verdict. FAILED proposals are still opened — they document
+     which litellm version breaks which shield behavior.
+  2. Dependabot handles all other Python deps (litellm ignored) and
+     GitHub Actions versions.
+  3. `inference_gate/shields.py` carries `TESTED_LITELLM_VERSION` and logs
+     a startup warning whenever the running litellm differs — BYO users
+     see drift immediately. `TestLitellmVersionPolicy` asserts constraint,
+     installed version, and the constant stay in sync (drift fails CI).
+  4. Policy documented in `docs/security/LITELLM_VERSION_POLICY.md`
+     (the doc D-002 anticipated).
+- **Alternatives:** plain Dependabot for litellm (rejected — constraint
+  blocks it and its PRs would be ungated); hard startup failure on
+  version mismatch (rejected — hostile to BYO users on newer litellm;
+  warning + open metadata range is the honest contract).
+- **Consequences:** the pin is self-maintaining; unit floor rises to 157.

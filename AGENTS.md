@@ -51,8 +51,11 @@ proxy or provider. `demo.py` and `smoke_test.py` need real provider creds.
 - `inference_gate/contracts.py` is the normative control-plane vocabulary
   (P1). Changing Action precedence, Mode semantics, or TenantContext
   fail-closed behavior requires a DECISIONS.md entry.
-- LiteLLM is pinned at **1.82.0** via `uv.lock`. `requirements.txt` is a stale
-  legacy export (Mar 2026) — do not install from it; see DECISIONS.md D-002.
+- LiteLLM is pinned at **1.82.0** via `uv.lock` + the `tool.uv` constraint.
+  Upgrades go through the gated `litellm-bump` workflow — see
+  `docs/security/LITELLM_VERSION_POLICY.md` (D-002, D-015). Keep
+  `TESTED_LITELLM_VERSION` in `inference_gate/shields.py` in sync (a unit
+  test enforces this).
 - Python >=3.10; CI runs 3.12 and 3.13 with `uv`. Gitleaks already runs in CI.
 - `.env`, `.go.env`, `.groq.env` hold real credentials and are gitignored.
   **Never read them into context, print them, or commit them.** `typescript`

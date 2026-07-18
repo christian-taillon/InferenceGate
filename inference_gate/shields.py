@@ -133,6 +133,13 @@ VALID_FAIL_MODES = {"open", "closed"}
 FAIL_MODE = os.getenv("INFERENCE_GATE_FAIL_MODE", "open").lower()
 BLOCKED_MESSAGE = "Request blocked by content safety shield."
 
+# The litellm version the shields are verified against. Guardrail hook
+# dispatch is litellm-internal behavior; other versions get a startup
+# warning until the compatibility suite (pytest tests/ -m integration)
+# has been run against them. Kept in sync with the deployment pin in
+# pyproject.toml by the litellm-bump workflow and a unit test.
+TESTED_LITELLM_VERSION = "1.82.0"
+
 # Security invariant: log records must never contain message or response
 # content, even truncated — exception text may embed request payloads, so
 # only exception types are logged (ShieldConfigError excepted: its message
@@ -1209,6 +1216,31 @@ def register_with_litellm_ui() -> bool:
 
 
 UI_REGISTERED = register_with_litellm_ui()
+
+
+def _warn_on_untested_litellm() -> None:
+    """Warn once at import when the running litellm is not the version the
+    shields were verified against. Enforcement depends on litellm-internal
+    hook dispatch, so an untested version deserves a visible flag — run
+    the compatibility suite before trusting it."""
+    try:
+        from importlib.metadata import version
+
+        installed = version("litellm")
+    except Exception:  # litellm not installed as a distribution (test shims)
+        return
+    if installed != TESTED_LITELLM_VERSION:
+        logger.warning(
+            "litellm %s detected; InferenceGate shields are tested against "
+            "%s. Guardrail hook dispatch is litellm-internal behavior — run "
+            "the compatibility suite (pytest tests/ -m integration) before "
+            "trusting enforcement on this version.",
+            installed,
+            TESTED_LITELLM_VERSION,
+        )
+
+
+_warn_on_untested_litellm()
 
 llama_prompt_guard_instance = LlamaPromptGuardShield()
 prompt_guard_local_instance = PromptGuardLocalShield()

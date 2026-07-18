@@ -398,3 +398,22 @@ Never rewrite or delete prior entries. Newest entry last.
   the packaged classes); full suites through the shim live.
 - **Tests:** **153 unit + 6 integration**, ruff clean.
 - **Exact next action:** unchanged — `p2.normalization` v2 track.
+
+---
+
+## 2026-07-17 — litellm upgrade automation + tested-version warning (D-015)
+
+- **Agent:** Claude Code (claude-fable-5), interactive session
+- **Files:** `.github/workflows/litellm-bump.yml` (weekly PyPI check →
+  bump on branch → full battery in-workflow → PR with verdict),
+  `.github/dependabot.yml` (uv + actions ecosystems; litellm ignored),
+  `inference_gate/shields.py` (`TESTED_LITELLM_VERSION` + startup warning
+  `_warn_on_untested_litellm`), `tests/test_firewall.py`
+  (TestLitellmVersionPolicy: constraint/installed/constant sync + warning
+  behavior), `docs/security/LITELLM_VERSION_POLICY.md` (the D-002 doc),
+  DECISIONS D-015, CHANGELOG.
+- **Key constraint honored:** GITHUB_TOKEN-created PRs don't trigger the
+  Tests workflow, so the compatibility battery runs inside litellm-bump
+  and its verdict lands in the PR title/body.
+- **Tests:** 157 unit + 6 integration, ruff clean.
+- **Exact next action:** unchanged — `p2.normalization` v2 track.

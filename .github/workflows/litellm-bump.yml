@@ -1,0 +1,146 @@
+# Weekly litellm upgrade proposal, gated by the compatibility battery.
+#
+# The deployment pins litellm exactly (tool.uv.constraint-dependencies +
+# uv.lock) because guardrail hook dispatch is litellm-internal behavior
+# (DECISIONS.md D-002/D-004/D-014). This workflow keeps that pin from
+# becoming a staleness trap: it checks PyPI for a newer litellm, applies
+# the bump on a branch, runs the full unit + live-proxy integration
+# suites against it, and opens a PR with the results.
+#
+# The battery runs HERE because PRs opened with GITHUB_TOKEN do not
+# trigger the Tests workflow; close/reopen the PR to force a CI run.
+name: litellm bump
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  propose-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Determine current and latest litellm
+        id: versions
+        run: |
+          current=$(grep -oP 'constraint-dependencies = \["litellm==\K[^"]+' pyproject.toml)
+          latest=$(curl -sf https://pypi.org/pypi/litellm/json | python3 -c "import sys, json; print(json.load(sys.stdin)['info']['version'])")
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "Current: $current — Latest: $latest"
+
+      - name: Skip if already current or a proposal PR exists
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current="${{ steps.versions.outputs.current }}"
+          latest="${{ steps.versions.outputs.latest }}"
+          if [ "$current" = "$latest" ]; then
+            echo "Already on the latest litellm ($current)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(gh pr list --head "litellm-bump-$latest" --state all --json number --jq length)" != "0" ]; then
+            echo "PR for litellm $latest already exists"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Apply the bump everywhere the version is recorded
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          current="${{ steps.versions.outputs.current }}"
+          latest="${{ steps.versions.outputs.latest }}"
+          sed -i "s/litellm==${current}/litellm==${latest}/g" pyproject.toml README.md
+          sed -i "s/litellm\[proxy\]==${current}/litellm[proxy]==${latest}/g" DOCKER_DEPLOYMENT.md
+          sed -i "s/TESTED_LITELLM_VERSION = \"${current}\"/TESTED_LITELLM_VERSION = \"${latest}\"/" inference_gate/shields.py
+          uv lock
+          uv sync
+
+      - name: Run the compatibility battery
+        if: steps.gate.outputs.skip == 'false'
+        id: battery
+        run: |
+          set +e
+          uv run pytest tests/ -q > unit.log 2>&1
+          unit=$?
+          uv run pytest tests/ -m integration -q > integration.log 2>&1
+          integration=$?
+          set -e
+          echo "unit=$unit" >> "$GITHUB_OUTPUT"
+          echo "integration=$integration" >> "$GITHUB_OUTPUT"
+          tail -5 unit.log integration.log
+
+      - name: Open the proposal PR
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current="${{ steps.versions.outputs.current }}"
+          latest="${{ steps.versions.outputs.latest }}"
+          unit="${{ steps.battery.outputs.unit }}"
+          integration="${{ steps.battery.outputs.integration }}"
+
+          if [ "$unit" = "0" ] && [ "$integration" = "0" ]; then
+            verdict="PASSED"
+            title="chore(deps): bump litellm ${current} -> ${latest} (battery PASSED)"
+          else
+            verdict="FAILED — do not merge without investigation"
+            title="chore(deps): bump litellm ${current} -> ${latest} (battery FAILED)"
+          fi
+
+          {
+            echo "Automated litellm upgrade proposal (litellm-bump workflow)."
+            echo
+            echo "## Compatibility battery: ${verdict}"
+            echo
+            echo "| Suite | Exit code | Result |"
+            echo "|-------|-----------|--------|"
+            echo "| Unit (\`pytest tests/ -q\`) | ${unit} | $([ "$unit" = "0" ] && echo pass || echo FAIL) |"
+            echo "| Live-proxy integration (\`pytest tests/ -m integration -q\`) | ${integration} | $([ "$integration" = "0" ] && echo pass || echo FAIL) |"
+            echo
+            echo "The integration suite verifies hook dispatch order, request"
+            echo "blocking before the provider call, generic error responses,"
+            echo "and management-UI provider registration against litellm ${latest}."
+            echo
+            echo "<details><summary>Unit tail</summary>"
+            echo
+            echo '```'
+            tail -30 unit.log
+            echo '```'
+            echo "</details>"
+            echo
+            echo "<details><summary>Integration tail</summary>"
+            echo
+            echo '```'
+            tail -30 integration.log
+            echo '```'
+            echo "</details>"
+            echo
+            echo "Note: this PR was opened with GITHUB_TOKEN, so the Tests"
+            echo "workflow does not auto-run — the battery above already ran in"
+            echo "this workflow. Close and reopen the PR to force a CI run."
+            echo
+            echo "Policy: docs/security/LITELLM_VERSION_POLICY.md"
+          } > pr_body.md
+
+          rm -f unit.log integration.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="litellm-bump-${latest}"
+          git checkout -b "$branch"
+          git add pyproject.toml uv.lock README.md DOCKER_DEPLOYMENT.md inference_gate/shields.py
+          git commit -m "chore(deps): bump litellm ${current} -> ${latest}"
+          git push -u origin "$branch"
+          gh pr create --title "$title" --body-file pr_body.md --base main --head "$branch"
