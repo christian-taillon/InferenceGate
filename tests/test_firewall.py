@@ -1125,6 +1125,49 @@ class TestLiteLLMUIIntegration:
         assert shield.blocked_categories == frozenset({"S1", "S7"})
 
 
+class TestLitellmVersionPolicy:
+    """The tested-litellm version must stay in sync everywhere the
+    litellm-bump workflow edits it, and drift must be visible at startup."""
+
+    def test_tested_version_matches_deployment_constraint(self):
+        from pathlib import Path
+
+        pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+        match = re.search(r'constraint-dependencies\s*=\s*\["litellm==([^"]+)"\]', pyproject)
+        assert match, "deployment constraint pin missing from pyproject.toml"
+        assert match.group(1) == FIREWALL_CALLBACKS.TESTED_LITELLM_VERSION
+
+    def test_installed_litellm_is_the_tested_version(self):
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            installed = version("litellm")
+        except PackageNotFoundError:
+            pytest.skip("litellm not installed as a distribution")
+        assert installed == FIREWALL_CALLBACKS.TESTED_LITELLM_VERSION, (
+            "installed litellm differs from TESTED_LITELLM_VERSION — run the "
+            "compatibility suite and update the pin (see "
+            "docs/security/LITELLM_VERSION_POLICY.md)"
+        )
+
+    def test_warning_fires_on_version_mismatch(self, caplog, monkeypatch):
+        monkeypatch.setattr(FIREWALL_CALLBACKS, "TESTED_LITELLM_VERSION", "0.0.1")
+        with caplog.at_level(logging.WARNING, logger="inference_gate.shields"):
+            FIREWALL_CALLBACKS._warn_on_untested_litellm()
+        assert "tested against" in caplog.text
+
+    def test_no_warning_when_versions_match(self, caplog):
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            version("litellm")
+        except PackageNotFoundError:
+            pytest.skip("litellm not installed as a distribution")
+        with caplog.at_level(logging.WARNING, logger="inference_gate.shields"):
+            FIREWALL_CALLBACKS._warn_on_untested_litellm()
+        assert "tested against" not in caplog.text
+
+
 class TestMandatoryMasterKey:
     """Verify serve.py refuses to start with insecure default key."""
 

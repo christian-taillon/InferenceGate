@@ -1,0 +1,20 @@
+# Routine dependency updates. litellm is deliberately excluded: it carries
+# the shields' enforcement semantics and is bumped only by the dedicated
+# litellm-bump workflow, which runs the compatibility battery first
+# (docs/security/LITELLM_VERSION_POLICY.md, DECISIONS.md D-002/D-014/D-015).
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "litellm"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

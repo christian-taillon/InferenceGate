@@ -5,6 +5,18 @@ User-visible behavior, configuration, compatibility, and security changes.
 
 ## Unreleased
 
+### Added (2026-07-17 — version-policy automation)
+- `litellm-bump` workflow: weekly (or manual) litellm upgrade proposals —
+  applies the bump, runs the full unit + live-proxy battery against the
+  new version, and opens a PR titled with the verdict (D-015).
+- Dependabot for routine Python and GitHub Actions updates (litellm
+  excluded; it goes through the gated workflow).
+- Startup warning when the running litellm differs from
+  `TESTED_LITELLM_VERSION`; version sync (constraint / installed /
+  constant) is enforced by a unit test.
+- `docs/security/LITELLM_VERSION_POLICY.md` — the upgrade policy D-002
+  anticipated.
+
 ### Added (2026-07-15/16 — shield maturity, UI, packaging)
 - **Per-shield configuration** via `litellm_params` with env-var fallbacks:
   `api_base`, `api_key`, `model`, `fail_mode`, `threshold`,
