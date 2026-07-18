@@ -142,5 +142,7 @@ jobs:
           git checkout -b "$branch"
           git add pyproject.toml uv.lock README.md DOCKER_DEPLOYMENT.md inference_gate/shields.py
           git commit -m "chore(deps): bump litellm ${current} -> ${latest}"
-          git push -u origin "$branch"
+          # force: the proposal branch is bot-owned; a re-run after a
+          # partial failure must be able to replace it
+          git push -u --force origin "$branch"
           gh pr create --title "$title" --body-file pr_body.md --base main --head "$branch"
