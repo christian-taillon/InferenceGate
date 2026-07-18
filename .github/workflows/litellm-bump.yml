@@ -80,7 +80,7 @@ jobs:
           set -e
           echo "unit=$unit" >> "$GITHUB_OUTPUT"
           echo "integration=$integration" >> "$GITHUB_OUTPUT"
-          tail -5 unit.log integration.log
+          tail -n 5 unit.log integration.log
 
       - name: Open the proposal PR
         if: steps.gate.outputs.skip == 'false'
@@ -117,14 +117,14 @@ jobs:
             echo "<details><summary>Unit tail</summary>"
             echo
             echo '```'
-            tail -30 unit.log
+            tail -n 30 unit.log
             echo '```'
             echo "</details>"
             echo
             echo "<details><summary>Integration tail</summary>"
             echo
             echo '```'
-            tail -30 integration.log
+            tail -n 30 integration.log
             echo '```'
             echo "</details>"
             echo
