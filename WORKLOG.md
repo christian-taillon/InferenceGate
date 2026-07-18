@@ -417,3 +417,16 @@ Never rewrite or delete prior entries. Newest entry last.
   and its verdict lands in the PR title/body.
 - **Tests:** 157 unit + 6 integration, ruff clean.
 - **Exact next action:** unchanged — `p2.normalization` v2 track.
+
+### 2026-07-18 addendum — live verification of the automation
+
+- Two runner-only defects found and fixed by exercising the workflow for
+  real: GNU `tail -N` rejects multiple files (`tail -n` now), and the repo
+  setting "Allow GitHub Actions to create and approve pull requests" was
+  off (enabled via API; default workflow permissions remain read-only —
+  the workflow's own permissions block grants write). Proposal branch is
+  now force-pushed so re-runs are idempotent.
+- **First real proposal opened: PR #4 — litellm 1.82.0 → 1.92.0, battery
+  PASSED (157 unit + 6 integration green against 1.92.0).** Dependabot
+  opened PRs #1–#3 (checkout v7, setup-uv v7, gitleaks-action v3).
+- Merging PR #4 is a deliberate human decision per the version policy.
