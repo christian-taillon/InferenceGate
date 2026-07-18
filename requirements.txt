@@ -1472,11 +1472,14 @@ pynacl==1.6.2 \
     --hash=sha256:d29bfe37e20e015a7d8b23cfc8bd6aa7909c92a1b8f41ee416bbb3e79ef182b2 \
     --hash=sha256:fe9847ca47d287af41e82be1dd5e23023d3c31a951da134121ab02e42ac218c9
     # via litellm
-pyroscope-io==0.8.16 ; sys_platform != 'win32' \
-    --hash=sha256:6b91ce5b240f8de756c16a17022ca8e25ef8a4eed461c7d074b8a0841cf7b445 \
-    --hash=sha256:86f0f047554ff62bd92c3e5a26bc2809ccd467d11fbacb9fef898ba299dbda59 \
-    --hash=sha256:dc98355e27c0b7b61f27066500fe1045b70e9459bb8b9a3082bc4755cb6392b6 \
-    --hash=sha256:e07edcfd59f5bdce42948b92c9b118c824edbd551730305f095a6b9af401a9e8
+pyroscope-io==1.1.0 ; sys_platform != 'win32' \
+    --hash=sha256:03eb69c7a421fb8cc37d0e7e03a248aaa41a789cd7617dcefdabdefbac9c4a80 \
+    --hash=sha256:4f48ef1a734df6d9ed82d7f768fd29c802e9a9219c2e8ec8ebae3d454d5d91a8 \
+    --hash=sha256:593bd81a7ebc73f0b6cf1e9df8a031fb625e0628854b9cfb3efd715298a0c9ad \
+    --hash=sha256:7bc2fab0e5dfa88be8ff8617f85145d69cad582a8825e6214136d305103d889d \
+    --hash=sha256:921b6e67f660eb048fa527ed00d93ba6128516310fe949f704ddac7bf9925456 \
+    --hash=sha256:9bb6e3ee6733744e3c1cd267c031a77a91dfae0ea1d406162e6954d7642fd432 \
+    --hash=sha256:b5bb155cdbe7865963c60cc4c78589bed62025fc6d833d8adbe8f4daf6e086ff
     # via litellm
 pytest==9.0.2 \
     --hash=sha256:711ffd45bf766d5264d487b917733b453d917afd2b0ad65223959f59089f875b \
