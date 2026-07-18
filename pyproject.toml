@@ -18,20 +18,20 @@ dependencies = [
 
 [project.optional-dependencies]
 local-prompt-guard = [
-    "transformers>=4.40.0",
+    "transformers>=5.14.1",
     "torch>=2.0.0",
 ]
 
 [dependency-groups]
 # Installed by default for this repo (tool.uv.default-groups below); never
 # part of the published wheel.
-dev = ["pytest>=8.0.0", "ruff>=0.4.0", "requests>=2.32.5"]
+dev = ["pytest>=9.1.1", "ruff>=0.15.22", "requests>=2.34.2"]
 deployment = [
     # serve.py / demo.py / management-UI backend
-    "openai>=2.26.0,<3",
-    "requests>=2.32.5",
+    "openai>=2.46.0,<3",
+    "requests>=2.34.2",
     "python-dotenv>=1.0.1",
-    "prisma==0.11.0",
+    "prisma==0.15.0",
 ]
 
 [build-system]
