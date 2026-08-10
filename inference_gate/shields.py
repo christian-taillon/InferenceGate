@@ -138,7 +138,7 @@ BLOCKED_MESSAGE = "Request blocked by content safety shield."
 # warning until the compatibility suite (pytest tests/ -m integration)
 # has been run against them. Kept in sync with the deployment pin in
 # pyproject.toml by the litellm-bump workflow and a unit test.
-TESTED_LITELLM_VERSION = "1.92.0"
+TESTED_LITELLM_VERSION = "1.96.0"
 
 # Security invariant: log records must never contain message or response
 # content, even truncated — exception text may embed request payloads, so
