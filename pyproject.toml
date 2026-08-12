@@ -25,10 +25,10 @@ local-prompt-guard = [
 [dependency-groups]
 # Installed by default for this repo (tool.uv.default-groups below); never
 # part of the published wheel.
-dev = ["pytest>=9.1.1", "ruff>=0.15.22", "requests>=2.34.2"]
+dev = ["pytest>=9.1.1", "ruff>=0.16.2", "requests>=2.34.2"]
 deployment = [
     # serve.py / demo.py / management-UI backend
-    "openai>=2.46.0,<3",
+    "openai>=2.53.0,<3",
     "requests>=2.34.2",
     "python-dotenv>=1.0.1",
     "prisma==0.15.0",
