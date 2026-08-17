@@ -55,7 +55,7 @@ For the on-device classifier, install the extra: `pip install "inference-gate[lo
 
 Pair them with LiteLLM's native `litellm_content_filter` for zero-latency regex/PII/secret blocking — this repo's [`config.yaml`](config.yaml) is a working five-shield pipeline you can copy.
 
-**Version compatibility:** tested against `litellm==1.92.0` (the version this repo pins). The package declares `litellm>=1.82.0`; guardrail hook dispatch is litellm-internal behavior, so after changing LiteLLM versions run the credential-free compatibility suite from this repo: `uv run pytest tests/ -m integration`.
+**Version compatibility:** tested against `litellm==1.97.0` (the version this repo pins). The package declares `litellm>=1.82.0`; guardrail hook dispatch is litellm-internal behavior, so after changing LiteLLM versions run the credential-free compatibility suite from this repo: `uv run pytest tests/ -m integration`.
 
 ## Quick start — run the full gateway
 
