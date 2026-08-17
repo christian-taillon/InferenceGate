@@ -45,7 +45,7 @@ packages = ["inference_gate"]
 default-groups = ["dev", "deployment"]
 # The reference deployment runs the exact litellm version whose hook
 # dispatch was verified (DECISIONS.md D-002, D-004, D-014).
-constraint-dependencies = ["litellm==1.92.0"]
+constraint-dependencies = ["litellm==1.97.0"]
 
 [tool.pytest.ini_options]
 # Integration tests boot a live proxy; run them explicitly with -m integration
