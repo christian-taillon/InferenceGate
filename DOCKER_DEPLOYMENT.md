@@ -19,7 +19,7 @@ WORKDIR /app
 # LiteLLM version (DECISIONS.md D-002 / D-014)
 COPY pyproject.toml README.md LICENSE ./
 COPY inference_gate/ inference_gate/
-RUN pip install --no-cache-dir . "litellm[proxy]==1.92.0"
+RUN pip install --no-cache-dir . "litellm[proxy]==1.100.0"
 
 # Gateway config + loader shim (LiteLLM loads guardrail classes from
 # .py files relative to the config directory)
