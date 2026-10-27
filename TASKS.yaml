@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-16
+updated_at: 2026-10-27
 
 # Machine-readable task state for the InferenceGate v2 transformation.
 # Allowed states: pending ready in_progress blocked review completed rejected deferred
@@ -122,6 +122,61 @@ tasks:
         allow_credentials=True (proxy_server.py:1076); no config knob exists.
         CORS must be enforced at the fronting ingress until P11/P12. Native
         TLS flags (--ssl_certfile_path/--ssl_keyfile_path) confirmed present.
+
+  - id: p0.adopt-ruff-wide-ruleset
+    title: Adopt the wider ruff rule set that ruff >=0.17 enables by default
+    phase: p0-baseline
+    status: pending
+    owner_agent: unassigned
+    files: [pyproject.toml, inference_gate/, tests/, demo.py, serve.py]
+    dependencies: [p0.dependency-refresh-2026-10]
+    acceptance_criteria:
+      - >-
+        [tool.ruff.lint].select in pyproject.toml is widened past E4/E7/E9/F
+        and the resulting findings are either fixed or justified with
+        targeted noqa comments (no blanket ignores)
+      - >-
+        BLE001 (12 blind excepts) reviewed deliberately — fail-open vs
+        fail-closed semantics per AGENTS.md security invariants must not
+        change silently
+      - >-
+        RUF012 mutable class defaults resolved with ClassVar/field(default_factory)
+        rather than suppressed
+    tests: ["uv run ruff check .", "uv run pytest tests/ -q"]
+    notes:
+      - >-
+        Deferred out of the 2026-10-27 chore pass: a pure dependency bump
+        would have mixed ~70 lint findings (30 UP045, 12 BLE001, 9 RUF012,
+        6 B010, 4 UP037, 3 SIM117, 2 PLW1509, 2 I001, 2 RUF100) into
+        security-critical files with no functional reason.
+      - >-
+        Current state pins select = ["E4", "E7", "E9", "F"] explicitly so
+        the clean baseline is stable across future ruff upgrades.
+
+  - id: p0.dependency-refresh-2026-10
+    title: Drain the dependency PR queue (litellm 1.106.4 + lockfile refresh)
+    phase: p0-baseline
+    status: completed
+    owner_agent: opencode (2026-10-27)
+    files: [pyproject.toml, uv.lock, requirements.txt, README.md, DOCKER_DEPLOYMENT.md]
+    dependencies: [p0.dependency-reconcile]
+    acceptance_criteria:
+      - litellm pinned and TESTED_LITELLM_VERSION in sync at the latest release
+      - uv.lock refreshed to latest versions compatible with requires-python >=3.10
+      - requirements.txt regenerated with the uv export command in its header
+      - All 18 superseded dependency PRs closed on GitHub
+    tests:
+      - "uv run pytest tests/ -q  # 157 passed"
+      - "uv run pytest tests/ -m integration -q  # 6 passed"
+      - "uv run ruff check .  # clean"
+    notes:
+      - >-
+        litellm 1.106.4 came from the gated litellm-bump workflow (PR #39,
+        battery PASSED) and was squash-merged after local re-verification.
+      - >-
+        websockets stays 15.0.1 and importlib-metadata stays 8.9.0 —
+        litellm 1.106.4 caps them at <16.0 and <9.0, so dependabot PRs #12
+        and #15 were not takeable.
 
   # ── Phase 0.5: LiteLLM capability assessment ───────────────────────────
   - id: p05.capability-matrix
@@ -253,7 +308,8 @@ tasks:
         pre_call shields stopped running. Keep the dispatch-contract test.
       - Remote Prompt Guard classify path now async httpx (was blocking
         urllib in a thread); httpx declared as a direct dependency.
-      - 2026-07-16 (D-014): shields packaged as pip 'inference-gate'
+      - >-
+        2026-07-16 (D-014): shields packaged as pip 'inference-gate'
         (inference_gate/shields.py); firewall_callbacks.py is a compat
         shim. BYO-LiteLLM documented in README. Floors: 153 unit + 6
         integration.

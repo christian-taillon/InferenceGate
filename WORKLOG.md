@@ -462,3 +462,87 @@ Never rewrite or delete prior entries. Newest entry last.
   discarded (`.claude/`, `GUARDRAIL_ANALYSIS.md`, `.gitignore`/`PLAN.md`
   edits from a prior local analysis session).
 - **Next action:** resume `p2.normalization` per `TASKS.yaml`.
+
+---
+
+## 2026-10-27 — Drained the dependency PR queue (litellm 1.106.4 + full lock refresh)
+
+- **Agent:** OpenCode (deepseek-v4.1-flash-free), interactive session.
+- **Starting state:** `main` at `c453573` (clean), litellm pinned 1.92.0,
+  **18 open dependency PRs** — 13 `litellm-bump` proposals (1.93.0 →
+  1.106.4), dependabot's minor-and-patch group (#37), and four individual
+  major bumps (#12 websockets, #13 cryptography, #14 starlette,
+  #15 importlib-metadata).
+
+### What changed
+
+- **`2d50d29` — litellm 1.92.0 → 1.106.4 (#39).** Squash-merge of the
+  gated workflow proposal, which had already run the battery against
+  1.106.4. Re-verified locally before committing (157 unit + 6 integration
+  green, ruff clean). `TESTED_LITELLM_VERSION`, the `tool.uv`
+  constraint, README, and DOCKER_DEPLOYMENT moved in lockstep.
+- **`ce835ea` — `uv lock --upgrade` on top of that pin.** 81 packages
+  moved; `requirements.txt` regenerated with the `uv export` command in
+  its header. Highlights: fastapi 0.139.2 → 0.162.0, starlette 1.3.1 →
+  1.10.0, pydantic 2.12.5 → 2.14.1, openai 2.46.0 → 2.54.0, uvicorn
+  0.41.0 → 0.54.0, ruff 0.15.22 → 0.17.3, transformers 5.14.1 → 5.21.0,
+  torch 2.13.0 → 2.14.1.
+- **Floors bumped in `pyproject.toml`** to what was actually tested:
+  ruff ≥0.17.3, python-dotenv ≥1.2.4, transformers ≥5.20.2 (5.20.2, not
+  5.21.0 — 5.21.0 is only locked for `python_full_version >= 3.11`, and
+  `requires-python` is still ≥3.10).
+
+### Things worth remembering
+
+- **websockets and importlib-metadata could NOT be bumped.** litellm
+  1.106.4 caps `websockets>=15.0.1,<16.0` and
+  `importlib-metadata>=8.0.0,<9.0` (verified with `uv lock -P ... -v`), so
+  dependabot #12 (→16.1.1) and #15 (→9.0.0) were unmergeable by
+  construction. The lock correctly holds 15.0.1 / 8.9.0. If those need to
+  move, litellm has to lift its caps first.
+- **ruff ≥0.17 widened its default rule selection** far beyond the
+  historical E4/E7/E9/F. The same code that was clean on 0.15.22 reported
+  ~70 findings (30 UP045, 12 BLE001, 9 RUF012, 6 B010, 4 UP037, 3 SIM117,
+  2 PLW1509, 2 I001, 2 RUF100). Rather than churn security-critical files
+  inside a chore, `[tool.ruff.lint].select` is now pinned explicitly.
+  Adopting the wide set is tracked as `p0.adopt-ruff-wide-ruleset`.
+- **`TASKS.yaml` had been unparseable since 2026-07-16** — a `notes:` list
+  item beginning `- 2026-07-16 (D-014): ...` parsed as a nested mapping.
+  Converted to a `>-` folded scalar; the file now loads with
+  `yaml.safe_load` (25 tasks, `next_task: p2.normalization`).
+- **PR closing mechanism:** no `gh` CLI and no GitHub token exist on this
+  machine, so the API was unavailable. Each stale PR's head branch was
+  deleted with `git push origin --delete`, which auto-closes the PR. All
+  18 are now closed; **0 open PRs**. SHAs for recovery:
+
+  | branch | SHA |
+  |---|---|
+  | litellm-bump-1.92.0 | `667526eb` |
+  | litellm-bump-1.93.0 | `ce9850e1` |
+  | litellm-bump-1.95.0 | `08443974` |
+  | litellm-bump-1.96.0 | `4454c64c` |
+  | litellm-bump-1.97.0 | `2e7d153a` |
+  | litellm-bump-1.98.0 | `a24b5873` |
+  | litellm-bump-1.100.0 | `454f56fb` |
+  | litellm-bump-1.100.1 | `aca46ea8` |
+  | litellm-bump-1.102.0 | `22c096bb` |
+  | litellm-bump-1.103.0 | `a462880c` |
+  | litellm-bump-1.104.0 | `15af156f` |
+  | litellm-bump-1.105.0 | `2a6d9fd` |
+  | litellm-bump-1.106.0 | `73fb5384` |
+  | litellm-bump-1.106.4 | `431fed01` |
+  | dependabot/uv/minor-and-patch-ca8512cf18 | `b0865672` |
+  | dependabot/uv/importlib-metadata-9.0.0 | `508593f6` |
+  | dependabot/uv/starlette-1.3.1 | `673f2b8f` |
+  | dependabot/uv/cryptography-49.0.0 | `7025a7fd` |
+  | dependabot/uv/websockets-16.1.1 | `45deaa2f` |
+
+  Note: PR #39 shows as *closed*, not *merged* — the squash-merge SHA
+  differs from the proposal branch tip, so GitHub cannot link them. Its
+  content is on `main` as `2d50d29`.
+- **Local environment defect found (not fixed):** `~/.gitconfig` sets
+  `user.signingkey=/home/christian/.ssh/id_ed25519.pub` (a Linux path),
+  so every commit fails to sign on this macOS box. Worked around per
+  commit with `git -c user.signingkey="$HOME/.ssh/id_ed25519.pub"`; the
+  global config still needs fixing.
+- **Next action:** resume `p2.normalization` per `TASKS.yaml`.

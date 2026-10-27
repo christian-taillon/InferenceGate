@@ -5,6 +5,19 @@ User-visible behavior, configuration, compatibility, and security changes.
 
 ## Unreleased
 
+### Changed (2026-10-27 — dependency refresh)
+- **Tested against `litellm==1.106.4`** (was 1.92.0). Bumped through the
+  gated `litellm-bump` workflow (PR #39) and re-verified locally; the
+  runtime version-mismatch warning now triggers for anything else.
+- Lockfile refreshed to the latest versions compatible with
+  `requires-python >=3.10` (fastapi 0.162.0, starlette 1.10.0, pydantic
+  2.14.1, openai 2.54.0, uvicorn 0.54.0, transformers 5.21.0, torch
+  2.14.1). `websockets` and `importlib-metadata` stay at 15.0.1 / 8.9.0
+  because litellm caps them below 16.0 / 9.0.
+- `ruff` is now pinned to an explicit rule selection in
+  `[tool.ruff.lint]` instead of relying on tool defaults, so the lint
+  baseline no longer changes with ruff releases.
+
 ### Added (2026-07-17 — version-policy automation)
 - `litellm-bump` workflow: weekly (or manual) litellm upgrade proposals —
   applies the bump, runs the full unit + live-proxy battery against the
