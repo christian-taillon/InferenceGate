@@ -18,19 +18,19 @@ dependencies = [
 
 [project.optional-dependencies]
 local-prompt-guard = [
-    "transformers>=5.14.1",
+    "transformers>=5.20.2",
     "torch>=2.0.0",
 ]
 
 [dependency-groups]
 # Installed by default for this repo (tool.uv.default-groups below); never
 # part of the published wheel.
-dev = ["pytest>=9.1.1", "ruff>=0.15.22", "requests>=2.34.2"]
+dev = ["pytest>=9.1.1", "ruff>=0.17.3", "requests>=2.34.2"]
 deployment = [
     # serve.py / demo.py / management-UI backend
     "openai>=2.46.0,<3",
     "requests>=2.34.2",
-    "python-dotenv>=1.0.1",
+    "python-dotenv>=1.2.4",
     "prisma==0.15.0",
 ]
 
@@ -46,6 +46,18 @@ default-groups = ["dev", "deployment"]
 # The reference deployment runs the exact litellm version whose hook
 # dispatch was verified (DECISIONS.md D-002, D-004, D-014).
 constraint-dependencies = ["litellm==1.106.4"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# ruff >=0.17 widened its default rule selection far beyond the historical
+# E4/E7/E9/F defaults, which turned the repo's clean lint baseline into ~70
+# findings on a pure dependency bump (2026-10-27). Pin the selection
+# explicitly so lint results stay stable across ruff upgrades instead of
+# silently changing with tool defaults. Adopting the wider set is a separate,
+# reviewable change (TASKS.yaml: p0.adopt-ruff-wide-ruleset).
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 # Integration tests boot a live proxy; run them explicitly with -m integration
